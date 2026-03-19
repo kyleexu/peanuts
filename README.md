@@ -34,11 +34,13 @@
 
 默认配置（可在各模块配置文件覆盖）：
 
+按照业务流程，顺序如下：
+
 - 订单入站（gateway -> match-engine）：`streamId=2001`
-- 执行回报（match-engine -> 下游）：`outboundStreamId=2002`
-- 成交明细（match-engine -> 下游）：`tradeStreamId=2003`
 - 资金锁定请求（gateway -> account-service）：`lockRequestStreamId=2101`
 - 资金锁定响应（account-service -> gateway）：`lockResponseStreamId=2102`
+- 执行回报（match-engine -> 下游）：`outboundStreamId=2002`
+- 成交明细（match-engine -> 下游）：`tradeStreamId=2003`
 
 ## 5. 高性能轮询策略
 

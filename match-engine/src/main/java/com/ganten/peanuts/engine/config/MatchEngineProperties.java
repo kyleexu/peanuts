@@ -13,6 +13,7 @@ public class MatchEngineProperties {
     private int inboundStreamId = 2001;
     private int outboundStreamId = 2002;
     private int tradeStreamId = 2003;
+    private int orderBookStreamId = 2004;
     private int fragmentLimit = 10;
 
     public boolean isEnabled() {
@@ -69,6 +70,14 @@ public class MatchEngineProperties {
 
     public void setTradeStreamId(int tradeStreamId) {
         this.tradeStreamId = tradeStreamId;
+    }
+
+    public int getOrderBookStreamId() {
+        return orderBookStreamId;
+    }
+
+    public void setOrderBookStreamId(int orderBookStreamId) {
+        this.orderBookStreamId = orderBookStreamId;
     }
 
     public int getFragmentLimit() {

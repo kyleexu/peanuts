@@ -11,10 +11,12 @@ import com.ganten.peanuts.common.aeron.AeronPollWorker;
 import com.ganten.peanuts.common.entity.ExecutionReport;
 import com.ganten.peanuts.common.entity.Order;
 import com.ganten.peanuts.common.entity.Trade;
+import com.ganten.peanuts.common.enums.Contract;
 import com.ganten.peanuts.common.enums.ExecType;
 import com.ganten.peanuts.common.enums.Side;
 import com.ganten.peanuts.engine.codec.OrderDecoder;
 import com.ganten.peanuts.engine.config.MatchEngineProperties;
+import com.ganten.peanuts.engine.model.OrderBook;
 import com.ganten.peanuts.engine.service.MatchService;
 import io.aeron.Subscription;
 import io.aeron.logbuffer.FragmentHandler;
@@ -27,6 +29,7 @@ public class AeronOrderSubscriber {
     private final MatchEngineProperties properties;
     private final AeronExecutionReportPublisher publisher;
     private final AeronTradePublisher tradePublisher;
+    private final AeronOrderBookPublisher orderBookPublisher;
     private final OrderDecoder orderDecoder;
     private final MatchService matchService;
 
@@ -35,10 +38,12 @@ public class AeronOrderSubscriber {
     private AeronPollWorker pollWorker;
 
     public AeronOrderSubscriber(MatchEngineProperties properties, AeronExecutionReportPublisher publisher,
-            AeronTradePublisher tradePublisher, OrderDecoder orderDecoder, MatchService matchService) {
+            AeronTradePublisher tradePublisher, AeronOrderBookPublisher orderBookPublisher, OrderDecoder orderDecoder,
+            MatchService matchService) {
         this.properties = properties;
         this.publisher = publisher;
         this.tradePublisher = tradePublisher;
+        this.orderBookPublisher = orderBookPublisher;
         this.orderDecoder = orderDecoder;
         this.matchService = matchService;
     }
@@ -65,11 +70,11 @@ public class AeronOrderSubscriber {
             List<ExecutionReport> reports = matchService.match(order);
             for (ExecutionReport report : reports) {
                 publisher.publish(report);
-                Trade trade = toTrade(report);
-                if (trade != null) {
-                    tradePublisher.publish(trade);
-                }
             }
+            publishTrades(reports);
+
+            // 推送订单簿快照
+            publishOrderBook(order.getContract());
         };
         pollWorker = AeronPollWorker.start("match-engine-order-poller",
                 () -> subscription.poll(orderHandler, properties.getFragmentLimit()),
@@ -86,25 +91,61 @@ public class AeronOrderSubscriber {
         }
     }
 
-    private Trade toTrade(ExecutionReport report) {
-        if (report.getExecType() != ExecType.TRADE || report.getMatchedQuantity() == null
-                || report.getMatchedQuantity().signum() <= 0) {
-            return null;
-        }
+    private void publishTrades(List<ExecutionReport> reports) {
+        for (int i = 0; i < reports.size() - 1; i++) {
+            ExecutionReport first = reports.get(i);
+            ExecutionReport second = reports.get(i + 1);
 
-        Trade trade = new Trade();
-        trade.setTradeId(tradeIdGenerator.incrementAndGet());
-        if (report.getSide() == Side.BUY) {
-            trade.setBuyOrderId(report.getOrderId());
-            trade.setSellOrderId(report.getCounterpartyOrderId());
-        } else {
-            trade.setBuyOrderId(report.getCounterpartyOrderId());
-            trade.setSellOrderId(report.getOrderId());
+            ExecutionReport buyReport;
+            ExecutionReport sellReport;
+            if (first.getSide() == Side.BUY && second.getSide() == Side.SELL) {
+                buyReport = first;
+                sellReport = second;
+            } else if (first.getSide() == Side.SELL && second.getSide() == Side.BUY) {
+                buyReport = second;
+                sellReport = first;
+            } else {
+                continue;
+            }
+
+            if (buyReport.getExecType() != ExecType.TRADE || sellReport.getExecType() != ExecType.TRADE) {
+                continue;
+            }
+            if (buyReport.getOrderId() != sellReport.getCounterpartyOrderId()
+                    || sellReport.getOrderId() != buyReport.getCounterpartyOrderId()) {
+                continue;
+            }
+            if (buyReport.getMatchedQuantity() == null || buyReport.getMatchedQuantity().signum() <= 0) {
+                continue;
+            }
+
+            Trade trade = new Trade();
+            trade.setTradeId(tradeIdGenerator.incrementAndGet());
+            trade.setBuyOrderId(buyReport.getOrderId());
+            trade.setSellOrderId(sellReport.getOrderId());
+            trade.setBuyUserId(buyReport.getUserId());
+            trade.setSellUserId(sellReport.getUserId());
+            trade.setContract(buyReport.getContract());
+            trade.setPrice(buyReport.getMatchedPrice());
+            trade.setQuantity(buyReport.getMatchedQuantity());
+            trade.setTimestamp(Math.max(buyReport.getTimestamp(), sellReport.getTimestamp()));
+            tradePublisher.publish(trade);
+            i++;
         }
-        trade.setContract(report.getContract());
-        trade.setPrice(report.getMatchedPrice());
-        trade.setQuantity(report.getMatchedQuantity());
-        trade.setTimestamp(report.getTimestamp());
-        return trade;
+    }
+
+    /**
+     * 推送订单簿快照到 Aeron channel
+     *
+     * @param contract 合约
+     */
+    private void publishOrderBook(Contract contract) {
+        try {
+            OrderBook orderBook = matchService.getOrderBook(contract);
+            orderBookPublisher.publish(contract, orderBook);
+            log.debug("Order book published for contract={}", contract);
+        } catch (Exception e) {
+            log.warn("Failed to publish order book for contract={}: {}", contract, e.getMessage());
+        }
     }
 }

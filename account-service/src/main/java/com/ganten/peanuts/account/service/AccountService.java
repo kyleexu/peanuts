@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import org.springframework.stereotype.Service;
 import com.ganten.peanuts.account.cache.AccountCache;
 import com.ganten.peanuts.common.entity.AccountAssetSnapshot;
+import com.ganten.peanuts.common.entity.Trade;
 import com.ganten.peanuts.common.enums.Currency;
 
 @Service
@@ -37,5 +38,13 @@ public class AccountService {
 
 	public boolean transferIncrease(long fromUserId, long toUserId, Currency currency, BigDecimal amount) {
 		return accountCache.transferIncrease(fromUserId, toUserId, currency, amount);
+	}
+
+	public boolean applyTrade(Trade trade) {
+		if (trade == null || trade.getContract() == null || trade.getPrice() == null || trade.getQuantity() == null) {
+			return false;
+		}
+		return accountCache.settleTrade(trade.getBuyUserId(), trade.getSellUserId(), trade.getContract().getBase(),
+				trade.getContract().getQuote(), trade.getPrice(), trade.getQuantity());
 	}
 }

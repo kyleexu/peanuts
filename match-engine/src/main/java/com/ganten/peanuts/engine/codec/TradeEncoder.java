@@ -19,6 +19,10 @@ public class TradeEncoder {
         offset += 8;
         buffer.putLong(offset, trade.getSellOrderId());
         offset += 8;
+        buffer.putLong(offset, trade.getBuyUserId());
+        offset += 8;
+        buffer.putLong(offset, trade.getSellUserId());
+        offset += 8;
         buffer.putInt(offset, trade.getContract().ordinal());
         offset += 4;
         offset += buffer.putStringAscii(offset, trade.getPrice() == null ? "" : trade.getPrice().toPlainString());

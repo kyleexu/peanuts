@@ -9,6 +9,7 @@ public class AccountAeronProperties {
     private String channel = "aeron:ipc";
     private int lockRequestStreamId = 2101;
     private int lockResponseStreamId = 2102;
+    private int tradeStreamId = 2003;
 
     public boolean isEnabled() {
         return enabled;
@@ -40,5 +41,13 @@ public class AccountAeronProperties {
 
     public void setLockResponseStreamId(int lockResponseStreamId) {
         this.lockResponseStreamId = lockResponseStreamId;
+    }
+
+    public int getTradeStreamId() {
+        return tradeStreamId;
+    }
+
+    public void setTradeStreamId(int tradeStreamId) {
+        this.tradeStreamId = tradeStreamId;
     }
 }

@@ -11,7 +11,6 @@
         <module>match-engine</module>
         <module>risk-service</module>
         <module>order-gateway</module>
-        <module>common-protocol</module>
         <module>pressure-test</module>
         <module>monitor-dashboard</module>
     </modules>
@@ -49,6 +48,11 @@
 
     <dependencyManagement>
         <dependencies>
+            <dependency>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-starter-websocket</artifactId>
+                <version>${spring-boot.version}</version>
+            </dependency>
             <dependency>
                 <groupId>org.agrona</groupId>
                 <artifactId>agrona</artifactId>

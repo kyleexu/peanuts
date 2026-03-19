@@ -14,6 +14,16 @@ public class MatchService {
 
     private final Map<Contract, OrderBook> books = new HashMap<Contract, OrderBook>();
 
+    /**
+     * 获取指定合约的订单簿（已同步）
+     *
+     * @param contract 合约
+     * @return 订单簿（如果不存在则返回空订单簿）
+     */
+    public synchronized OrderBook getOrderBook(Contract contract) {
+        return orderBook(contract);
+    }
+
     public synchronized List<ExecutionReport> match(Order order) {
         normalize(order);
 

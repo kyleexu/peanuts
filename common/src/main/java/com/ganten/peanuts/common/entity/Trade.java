@@ -8,6 +8,8 @@ public class Trade {
     private long tradeId;
     private long buyOrderId;
     private long sellOrderId;
+    private long buyUserId;
+    private long sellUserId;
     private Contract contract;
     private BigDecimal price;
     private BigDecimal quantity;
@@ -35,6 +37,22 @@ public class Trade {
 
     public void setSellOrderId(long sellOrderId) {
         this.sellOrderId = sellOrderId;
+    }
+
+    public long getBuyUserId() {
+        return buyUserId;
+    }
+
+    public void setBuyUserId(long buyUserId) {
+        this.buyUserId = buyUserId;
+    }
+
+    public long getSellUserId() {
+        return sellUserId;
+    }
+
+    public void setSellUserId(long sellUserId) {
+        this.sellUserId = sellUserId;
     }
 
     public Contract getContract() {

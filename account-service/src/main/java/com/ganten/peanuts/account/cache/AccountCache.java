@@ -104,6 +104,39 @@ public class AccountCache {
 		}
 	}
 
+	public boolean settleTrade(long buyUserId, long sellUserId, Currency baseCurrency, Currency quoteCurrency,
+			BigDecimal price, BigDecimal quantity) {
+		validateAmount(price, "price");
+		validateAmount(quantity, "quantity");
+		Currency base = requireCurrency(baseCurrency);
+		Currency quote = requireCurrency(quoteCurrency);
+		BigDecimal notional = price.multiply(quantity);
+
+		UserBalance buy = getOrCreateBalance(buyUserId);
+		UserBalance sell = getOrCreateBalance(sellUserId);
+		UserBalance first = buyUserId <= sellUserId ? buy : sell;
+		UserBalance second = buyUserId <= sellUserId ? sell : buy;
+
+		synchronized (first) {
+			synchronized (second) {
+				BigDecimal buyLockedQuote = buy.locked.getOrDefault(quote, BigDecimal.ZERO);
+				BigDecimal sellLockedBase = sell.locked.getOrDefault(base, BigDecimal.ZERO);
+				if (buyLockedQuote.compareTo(notional) < 0 || sellLockedBase.compareTo(quantity) < 0) {
+					return false;
+				}
+
+				buy.locked.put(quote, buyLockedQuote.subtract(notional));
+				BigDecimal buyAvailableBase = buy.available.getOrDefault(base, BigDecimal.ZERO);
+				buy.available.put(base, buyAvailableBase.add(quantity));
+
+				sell.locked.put(base, sellLockedBase.subtract(quantity));
+				BigDecimal sellAvailableQuote = sell.available.getOrDefault(quote, BigDecimal.ZERO);
+				sell.available.put(quote, sellAvailableQuote.add(notional));
+				return true;
+			}
+		}
+	}
+
 	private UserBalance getOrCreateBalance(long userId) {
 		return accountAssets.computeIfAbsent(Long.valueOf(userId), k -> new UserBalance());
 	}
