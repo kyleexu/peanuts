@@ -13,6 +13,7 @@ import org.springframework.stereotype.Component;
 import com.ganten.peanuts.common.entity.AccountLockRequest;
 import com.ganten.peanuts.common.entity.AccountLockResponse;
 import com.ganten.peanuts.common.entity.Order;
+import com.ganten.peanuts.common.enums.Currency;
 import com.ganten.peanuts.common.enums.Side;
 import com.ganten.peanuts.gateway.config.AeronProperties;
 import com.ganten.peanuts.gateway.model.EncodedOrder;
@@ -83,23 +84,23 @@ public class AccountLockAeronClient {
     }
 
     private AccountLockRequest buildRequest(Order order) {
-        String asset;
+        Currency currency;
         BigDecimal amount;
         if (order.getSide() == Side.BUY) {
             if (order.getPrice() == null) {
                 throw new IllegalArgumentException("buy order price required for account lock");
             }
-            asset = order.getContract().getQuote();
+            currency = order.getContract().getQuote();
             amount = order.getPrice().multiply(order.getTotalQuantity());
         } else {
-            asset = order.getContract().getBase();
+            currency = order.getContract().getBase();
             amount = order.getTotalQuantity();
         }
 
         AccountLockRequest request = new AccountLockRequest();
         request.setRequestId(requestIdGenerator.getAndIncrement());
         request.setUserId(order.getUserId());
-        request.setAsset(asset);
+        request.setCurrency(currency);
         request.setAmount(amount);
         request.setTimestamp(System.currentTimeMillis());
         return request;

@@ -2,8 +2,8 @@ package com.ganten.peanuts.account.model;
 
 import java.math.BigDecimal;
 import javax.validation.constraints.DecimalMin;
-import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.NotNull;
+import com.ganten.peanuts.common.enums.Currency;
 
 public class TransferIncreaseRequest {
 
@@ -13,8 +13,8 @@ public class TransferIncreaseRequest {
     @NotNull
     private Long toUserId;
 
-    @NotBlank
-    private String asset;
+    @NotNull
+    private Currency currency;
 
     @NotNull
     @DecimalMin("0.00000001")
@@ -36,12 +36,12 @@ public class TransferIncreaseRequest {
         this.toUserId = toUserId;
     }
 
-    public String getAsset() {
-        return asset;
+    public Currency getCurrency() {
+        return currency;
     }
 
-    public void setAsset(String asset) {
-        this.asset = asset;
+    public void setCurrency(Currency currency) {
+        this.currency = currency;
     }
 
     public BigDecimal getAmount() {

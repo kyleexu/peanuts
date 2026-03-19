@@ -1,14 +1,13 @@
 package com.ganten.peanuts.account.model;
 
-import com.ganten.peanuts.account.cache.AccountCache.AccountAssetSnapshot;
+import com.ganten.peanuts.common.entity.AccountAssetSnapshot;
 
 public class OperationResult {
 
     private boolean success;
     private AccountAssetSnapshot balance;
 
-    public OperationResult() {
-    }
+    public OperationResult() {}
 
     public OperationResult(boolean success, AccountAssetSnapshot balance) {
         this.success = success;

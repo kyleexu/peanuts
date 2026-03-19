@@ -29,7 +29,7 @@ public class AccountLockAeronProcessor {
     private Publication responsePublication;
 
     public AccountLockAeronProcessor(AccountAeronProperties properties, AccountService accountService,
-        AccountLockMessageCodec codec) {
+            AccountLockMessageCodec codec) {
         this.properties = properties;
         this.accountService = accountService;
         this.codec = codec;
@@ -43,8 +43,8 @@ public class AccountLockAeronProcessor {
         aeron = Aeron.connect();
         requestSubscription = aeron.addSubscription(properties.getChannel(), properties.getLockRequestStreamId());
         responsePublication = aeron.addPublication(properties.getChannel(), properties.getLockResponseStreamId());
-        log.info("Account lock Aeron processor ready. channel={}, reqStream={}, respStream={}",
-            properties.getChannel(), properties.getLockRequestStreamId(), properties.getLockResponseStreamId());
+        log.info("Account lock Aeron processor ready. channel={}, reqStream={}, respStream={}", properties.getChannel(),
+                properties.getLockRequestStreamId(), properties.getLockResponseStreamId());
     }
 
     @Scheduled(fixedDelay = 20L)
@@ -54,15 +54,13 @@ public class AccountLockAeronProcessor {
         }
         FragmentHandler handler = (buffer, offset, length, header) -> {
             AccountLockRequest request = codec.decodeRequest(buffer, offset);
-            boolean success = accountService.lock(request.getUserId(), request.getAsset(), request.getAmount());
+            boolean success = accountService.tryLock(request.getUserId(), request.getCurrency(), request.getAmount());
 
             AccountLockResponse response = new AccountLockResponse();
             response.setRequestId(request.getRequestId());
             response.setSuccess(success);
             if (success) {
                 response.setMessage("locked");
-            } else if (accountService.isFrozen(request.getUserId(), request.getAsset())) {
-                response.setMessage("asset is frozen for trading/withdrawal");
             } else {
                 response.setMessage("insufficient available balance");
             }
@@ -70,8 +68,7 @@ public class AccountLockAeronProcessor {
             UnsafeBuffer encoded = codec.encodeResponse(response);
             long result = responsePublication.offer(encoded, 0, encoded.capacity());
             if (result <= 0) {
-                log.warn("Account lock response back pressured, requestId={}, code={}", request.getRequestId(),
-                    result);
+                log.warn("Account lock response back pressured, requestId={}, code={}", request.getRequestId(), result);
             }
         };
 

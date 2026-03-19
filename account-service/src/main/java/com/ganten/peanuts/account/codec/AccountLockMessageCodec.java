@@ -6,6 +6,7 @@ import org.agrona.concurrent.UnsafeBuffer;
 import org.springframework.stereotype.Component;
 import com.ganten.peanuts.common.entity.AccountLockRequest;
 import com.ganten.peanuts.common.entity.AccountLockResponse;
+import com.ganten.peanuts.common.enums.Currency;
 
 @Component
 public class AccountLockMessageCodec {
@@ -17,11 +18,11 @@ public class AccountLockMessageCodec {
         currentOffset += 8;
         request.setUserId(buffer.getLong(currentOffset));
         currentOffset += 8;
-        String asset = buffer.getStringAscii(currentOffset);
-        currentOffset += 4 + asset.length();
+        String currency = buffer.getStringAscii(currentOffset);
+        currentOffset += 4 + currency.length();
         String amount = buffer.getStringAscii(currentOffset);
         currentOffset += 4 + amount.length();
-        request.setAsset(asset);
+        request.setCurrency(currency.isEmpty() ? null : Currency.valueOf(currency));
         request.setAmount(amount.isEmpty() ? BigDecimal.ZERO : new BigDecimal(amount));
         request.setTimestamp(buffer.getLong(currentOffset));
         return request;

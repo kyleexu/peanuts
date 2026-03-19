@@ -1,6 +1,6 @@
 package com.ganten.peanuts.account.model;
 
-import com.ganten.peanuts.account.cache.AccountCache.AccountAssetSnapshot;
+import com.ganten.peanuts.common.entity.AccountAssetSnapshot;
 
 public class TransferResult {
 

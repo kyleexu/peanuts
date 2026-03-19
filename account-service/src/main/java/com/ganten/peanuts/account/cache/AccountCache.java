@@ -1,200 +1,128 @@
 package com.ganten.peanuts.account.cache;
 
 import java.math.BigDecimal;
+import java.util.EnumMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.locks.ReentrantLock;
 import org.springframework.stereotype.Service;
+import com.ganten.peanuts.common.entity.AccountAssetSnapshot;
+import com.ganten.peanuts.common.enums.Currency;
 
 @Service
 public class AccountCache {
 
-	private final Map<Long, Map<String, AssetBalance>> accountAssets = new ConcurrentHashMap<Long, Map<String, AssetBalance>>();
+	private final Map<Long, UserBalance> accountAssets = new ConcurrentHashMap<Long, UserBalance>();
 
-	public AccountAssetSnapshot query(long userId, String asset) {
-		AssetBalance balance = getOrCreateBalance(userId, asset);
-		balance.stateLock.lock();
-		try {
-			return new AccountAssetSnapshot(userId, normalizeAsset(asset), balance.available, balance.locked,
-				balance.frozen);
-		} finally {
-			balance.stateLock.unlock();
+	public AccountAssetSnapshot query(long userId, Currency currency) {
+		UserBalance userBalance = getOrCreateBalance(userId);
+		Currency normalizedCurrency = requireCurrency(currency);
+		synchronized (userBalance) {
+			return new AccountAssetSnapshot(userId, normalizedCurrency,
+					userBalance.available.getOrDefault(normalizedCurrency, BigDecimal.ZERO),
+					userBalance.locked.getOrDefault(normalizedCurrency, BigDecimal.ZERO));
 		}
 	}
 
-	public void increaseAvailable(long userId, String asset, BigDecimal amount) {
+	public void increaseAvailable(long userId, Currency currency, BigDecimal amount) {
 		validateAmount(amount, "amount");
-		AssetBalance balance = getOrCreateBalance(userId, asset);
-		balance.stateLock.lock();
-		try {
-			balance.available = balance.available.add(amount);
-		} finally {
-			balance.stateLock.unlock();
+		UserBalance userBalance = getOrCreateBalance(userId);
+		Currency normalizedCurrency = requireCurrency(currency);
+		synchronized (userBalance) {
+			BigDecimal current = userBalance.available.getOrDefault(normalizedCurrency, BigDecimal.ZERO);
+			userBalance.available.put(normalizedCurrency, current.add(amount));
 		}
 	}
 
-	public boolean lock(long userId, String asset, BigDecimal amount) {
+	public boolean lock(long userId, Currency currency, BigDecimal amount) {
 		validateAmount(amount, "amount");
-		AssetBalance balance = getOrCreateBalance(userId, asset);
-		balance.stateLock.lock();
-		try {
-			if (balance.frozen) {
+		UserBalance userBalance = getOrCreateBalance(userId);
+		Currency normalizedCurrency = requireCurrency(currency);
+		synchronized (userBalance) {
+			BigDecimal available = userBalance.available.getOrDefault(normalizedCurrency, BigDecimal.ZERO);
+			if (available.compareTo(amount) < 0) {
 				return false;
 			}
-			if (balance.available.compareTo(amount) < 0) {
-				return false;
-			}
-			balance.available = balance.available.subtract(amount);
-			balance.locked = balance.locked.add(amount);
+			BigDecimal locked = userBalance.locked.getOrDefault(normalizedCurrency, BigDecimal.ZERO);
+			userBalance.available.put(normalizedCurrency, available.subtract(amount));
+			userBalance.locked.put(normalizedCurrency, locked.add(amount));
 			return true;
-		} finally {
-			balance.stateLock.unlock();
 		}
 	}
 
-	public boolean deductAvailable(long userId, String asset, BigDecimal amount) {
+	public boolean deductAvailable(long userId, Currency currency, BigDecimal amount) {
 		validateAmount(amount, "amount");
-		AssetBalance balance = getOrCreateBalance(userId, asset);
-		balance.stateLock.lock();
-		try {
-			if (balance.frozen) {
+		UserBalance userBalance = getOrCreateBalance(userId);
+		Currency normalizedCurrency = requireCurrency(currency);
+		synchronized (userBalance) {
+			BigDecimal available = userBalance.available.getOrDefault(normalizedCurrency, BigDecimal.ZERO);
+			if (available.compareTo(amount) < 0) {
 				return false;
 			}
-			if (balance.available.compareTo(amount) < 0) {
-				return false;
-			}
-			balance.available = balance.available.subtract(amount);
+			userBalance.available.put(normalizedCurrency, available.subtract(amount));
 			return true;
-		} finally {
-			balance.stateLock.unlock();
 		}
 	}
 
-	public boolean deductLocked(long userId, String asset, BigDecimal amount) {
+	public boolean deductLocked(long userId, Currency currency, BigDecimal amount) {
 		validateAmount(amount, "amount");
-		AssetBalance balance = getOrCreateBalance(userId, asset);
-		balance.stateLock.lock();
-		try {
-			if (balance.locked.compareTo(amount) < 0) {
+		UserBalance userBalance = getOrCreateBalance(userId);
+		Currency normalizedCurrency = requireCurrency(currency);
+		synchronized (userBalance) {
+			BigDecimal locked = userBalance.locked.getOrDefault(normalizedCurrency, BigDecimal.ZERO);
+			if (locked.compareTo(amount) < 0) {
 				return false;
 			}
-			balance.locked = balance.locked.subtract(amount);
+			userBalance.locked.put(normalizedCurrency, locked.subtract(amount));
 			return true;
-		} finally {
-			balance.stateLock.unlock();
 		}
 	}
 
-	public boolean transferIncrease(long fromUserId, long toUserId, String asset, BigDecimal amount) {
+	public boolean transferIncrease(long fromUserId, long toUserId, Currency currency, BigDecimal amount) {
 		validateAmount(amount, "amount");
 		if (fromUserId == toUserId) {
 			return true;
 		}
 
-		AssetBalance from = getOrCreateBalance(fromUserId, asset);
-		AssetBalance to = getOrCreateBalance(toUserId, asset);
+		UserBalance from = getOrCreateBalance(fromUserId);
+		UserBalance to = getOrCreateBalance(toUserId);
+		Currency normalizedCurrency = requireCurrency(currency);
 
-		AssetBalance first = fromUserId <= toUserId ? from : to;
-		AssetBalance second = fromUserId <= toUserId ? to : from;
+		UserBalance first = fromUserId <= toUserId ? from : to;
+		UserBalance second = fromUserId <= toUserId ? to : from;
 
-		first.stateLock.lock();
-		second.stateLock.lock();
-		try {
-			if (from.locked.compareTo(amount) < 0) {
-				return false;
+		synchronized (first) {
+			synchronized (second) {
+				BigDecimal fromLocked = from.locked.getOrDefault(normalizedCurrency, BigDecimal.ZERO);
+				if (fromLocked.compareTo(amount) < 0) {
+					return false;
+				}
+				BigDecimal toAvailable = to.available.getOrDefault(normalizedCurrency, BigDecimal.ZERO);
+				from.locked.put(normalizedCurrency, fromLocked.subtract(amount));
+				to.available.put(normalizedCurrency, toAvailable.add(amount));
+				return true;
 			}
-			from.locked = from.locked.subtract(amount);
-			to.available = to.available.add(amount);
-			return true;
-		} finally {
-			second.stateLock.unlock();
-			first.stateLock.unlock();
 		}
 	}
 
-	public void setFrozen(long userId, String asset, boolean frozen) {
-		AssetBalance balance = getOrCreateBalance(userId, asset);
-		balance.stateLock.lock();
-		try {
-			balance.frozen = frozen;
-		} finally {
-			balance.stateLock.unlock();
+	private UserBalance getOrCreateBalance(long userId) {
+		return accountAssets.computeIfAbsent(Long.valueOf(userId), k -> new UserBalance());
+	}
+
+	private Currency requireCurrency(Currency currency) {
+		if (currency == null) {
+			throw new IllegalArgumentException("currency must not be null");
 		}
+		return currency;
 	}
 
-	public boolean isFrozen(long userId, String asset) {
-		AssetBalance balance = getOrCreateBalance(userId, asset);
-		balance.stateLock.lock();
-		try {
-			return balance.frozen;
-		} finally {
-			balance.stateLock.unlock();
-		}
-	}
-
-	private AssetBalance getOrCreateBalance(long userId, String asset) {
-		Map<String, AssetBalance> userAssets = accountAssets.computeIfAbsent(Long.valueOf(userId),
-			k -> new ConcurrentHashMap<String, AssetBalance>());
-		String normalizedAsset = normalizeAsset(asset);
-		return userAssets.computeIfAbsent(normalizedAsset, k -> new AssetBalance());
-	}
-
-	private String normalizeAsset(String asset) {
-		if (asset == null || asset.trim().isEmpty()) {
-			throw new IllegalArgumentException("asset must not be blank");
-		}
-		return asset.trim().toUpperCase();
-	}
-
-	private void validateAmount(BigDecimal amount, String field) {
+	private void validateAmount(BigDecimal amount, String fieldName) {
 		if (amount == null || amount.signum() <= 0) {
-			throw new IllegalArgumentException(field + " must be positive");
+			throw new IllegalArgumentException(fieldName + " must be positive");
 		}
 	}
 
-	public static final class AccountAssetSnapshot {
-
-		private final long userId;
-		private final String asset;
-		private final BigDecimal available;
-		private final BigDecimal locked;
-		private final boolean frozen;
-
-		public AccountAssetSnapshot(long userId, String asset, BigDecimal available, BigDecimal locked,
-				boolean frozen) {
-			this.userId = userId;
-			this.asset = asset;
-			this.available = available;
-			this.locked = locked;
-			this.frozen = frozen;
-		}
-
-		public long getUserId() {
-			return userId;
-		}
-
-		public String getAsset() {
-			return asset;
-		}
-
-		public BigDecimal getAvailable() {
-			return available;
-		}
-
-		public BigDecimal getLocked() {
-			return locked;
-		}
-
-		public boolean isFrozen() {
-			return frozen;
-		}
-	}
-
-	private static final class AssetBalance {
-
-		private final ReentrantLock stateLock = new ReentrantLock();
-		private BigDecimal available = BigDecimal.ZERO;
-		private BigDecimal locked = BigDecimal.ZERO;
-		private boolean frozen = false;
+	private static final class UserBalance {
+		private final Map<Currency, BigDecimal> available = new EnumMap<Currency, BigDecimal>(Currency.class);
+		private final Map<Currency, BigDecimal> locked = new EnumMap<Currency, BigDecimal>(Currency.class);
 	}
 }

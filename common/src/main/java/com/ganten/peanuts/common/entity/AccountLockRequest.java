@@ -1,12 +1,13 @@
 package com.ganten.peanuts.common.entity;
 
 import java.math.BigDecimal;
+import com.ganten.peanuts.common.enums.Currency;
 
 public class AccountLockRequest {
 
     private long requestId;
     private long userId;
-    private String asset;
+    private Currency currency;
     private BigDecimal amount;
     private long timestamp;
 
@@ -26,12 +27,12 @@ public class AccountLockRequest {
         this.userId = userId;
     }
 
-    public String getAsset() {
-        return asset;
+    public Currency getCurrency() {
+        return currency;
     }
 
-    public void setAsset(String asset) {
-        this.asset = asset;
+    public void setCurrency(Currency currency) {
+        this.currency = currency;
     }
 
     public BigDecimal getAmount() {

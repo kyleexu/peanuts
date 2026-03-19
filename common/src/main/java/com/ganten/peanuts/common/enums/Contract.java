@@ -5,20 +5,20 @@ import lombok.Getter;
 @Getter
 public enum Contract {
     // btc/usdt
-    BTC_USDT(1L, "BTC", "USDT", "BTCUSDT", 0.01, 1),
+    BTC_USDT(1L, Currency.BTC, Currency.USDT, "BTCUSDT", 0.01, 1),
     // eth/usdt
-    ETH_USDT(2L, "ETH", "USDT", "ETHUSDT", 0.01, 1),
+    ETH_USDT(2L, Currency.ETH, Currency.USDT, "ETHUSDT", 0.01, 1),
     // usdt/usd
-    USDT_USD(3L, "USDT", "USD", "USDTUSD", 0.0001, 1);
+    USDT_USD(3L, Currency.USDT, Currency.USD, "USDTUSD", 0.0001, 1);
 
     private Long id;
-    private String base;
-    private String quote;
+    private Currency base;
+    private Currency quote;
     private String symbol;
     private double tickSize;
     private double lotSize;
 
-    Contract(Long id, String base, String quote, String symbol, double tickSize, double lotSize) {
+    Contract(Long id, Currency base, Currency quote, String symbol, double tickSize, double lotSize) {
         this.id = id;
         this.base = base;
         this.quote = quote;

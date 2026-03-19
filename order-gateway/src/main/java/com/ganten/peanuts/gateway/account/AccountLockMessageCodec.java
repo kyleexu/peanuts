@@ -6,6 +6,7 @@ import org.agrona.concurrent.UnsafeBuffer;
 import org.springframework.stereotype.Component;
 import com.ganten.peanuts.common.entity.AccountLockRequest;
 import com.ganten.peanuts.common.entity.AccountLockResponse;
+import com.ganten.peanuts.common.enums.Currency;
 import com.ganten.peanuts.gateway.model.EncodedOrder;
 
 @Component
@@ -19,7 +20,7 @@ public class AccountLockMessageCodec {
         offset += 8;
         buffer.putLong(offset, request.getUserId());
         offset += 8;
-        offset += buffer.putStringAscii(offset, request.getAsset() == null ? "" : request.getAsset());
+        offset += buffer.putStringAscii(offset, request.getCurrency() == null ? "" : request.getCurrency().name());
         offset += buffer.putStringAscii(offset, request.getAmount() == null ? "" : request.getAmount().toPlainString());
         buffer.putLong(offset, request.getTimestamp());
         offset += 8;
@@ -44,11 +45,11 @@ public class AccountLockMessageCodec {
         currentOffset += 8;
         request.setUserId(buffer.getLong(currentOffset));
         currentOffset += 8;
-        String asset = buffer.getStringAscii(currentOffset);
-        currentOffset += 4 + asset.length();
+        String currency = buffer.getStringAscii(currentOffset);
+        currentOffset += 4 + currency.length();
         String amount = buffer.getStringAscii(currentOffset);
         currentOffset += 4 + amount.length();
-        request.setAsset(asset);
+        request.setCurrency(currency.isEmpty() ? null : Currency.valueOf(currency));
         request.setAmount(amount.isEmpty() ? BigDecimal.ZERO : new BigDecimal(amount));
         request.setTimestamp(buffer.getLong(currentOffset));
         return request;
