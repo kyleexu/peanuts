@@ -1,0 +1,9 @@
+server:
+  port: 8081
+
+account:
+  aeron:
+    enabled: true
+    channel: aeron:ipc
+    lock-request-stream-id: 2101
+    lock-response-stream-id: 2102

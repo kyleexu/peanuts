@@ -5,6 +5,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <modules>
+        <module>account-service</module>
         <module>common</module>
         <module>market-service</module>
         <module>match-engine</module>

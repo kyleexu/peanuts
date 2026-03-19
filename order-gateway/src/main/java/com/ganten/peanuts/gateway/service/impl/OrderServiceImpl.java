@@ -5,10 +5,12 @@ import java.util.UUID;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.task.TaskExecutor;
 import org.springframework.stereotype.Service;
+import com.ganten.peanuts.common.entity.AccountLockResponse;
 import com.ganten.peanuts.common.entity.Order;
 import com.ganten.peanuts.common.enums.OrderAction;
 import com.ganten.peanuts.common.enums.OrderStatus;
 import com.ganten.peanuts.common.enums.Source;
+import com.ganten.peanuts.gateway.account.AccountLockAeronClient;
 import com.ganten.peanuts.gateway.dispatcher.OrderDispatcher;
 import com.ganten.peanuts.gateway.model.AcceptedResponse;
 import com.ganten.peanuts.gateway.model.OrderSubmitRequest;
@@ -18,11 +20,13 @@ import com.ganten.peanuts.gateway.service.OrderService;
 public class OrderServiceImpl implements OrderService {
 
     private final OrderDispatcher orderDispatcher;
+    private final AccountLockAeronClient accountLockAeronClient;
     private final TaskExecutor orderDispatchExecutor;
 
-    public OrderServiceImpl(OrderDispatcher orderDispatcher,
+    public OrderServiceImpl(OrderDispatcher orderDispatcher, AccountLockAeronClient accountLockAeronClient,
             @Qualifier("orderDispatchExecutor") TaskExecutor orderDispatchExecutor) {
         this.orderDispatcher = orderDispatcher;
+        this.accountLockAeronClient = accountLockAeronClient;
         this.orderDispatchExecutor = orderDispatchExecutor;
     }
 
@@ -71,6 +75,13 @@ public class OrderServiceImpl implements OrderService {
         }
         if (order.getAction() == null) {
             order.setAction(OrderAction.NEW);
+        }
+
+        if (order.getAction() == OrderAction.NEW) {
+            AccountLockResponse lockResponse = accountLockAeronClient.checkAndLock(order);
+            if (!lockResponse.isSuccess()) {
+                throw new IllegalArgumentException("account lock failed: " + lockResponse.getMessage());
+            }
         }
 
         orderDispatchExecutor.execute(new Runnable() {

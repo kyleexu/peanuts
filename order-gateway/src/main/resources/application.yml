@@ -6,6 +6,9 @@ gateway:
     enabled: true
     channel: aeron:ipc
     stream-id: 2001
+    account-lock-request-stream-id: 2101
+    account-lock-response-stream-id: 2102
+    account-lock-timeout-ms: 800
   random-order:
     enabled: true
     fixed-delay-ms: 1000
