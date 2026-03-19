@@ -6,8 +6,8 @@ import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import com.ganten.peanuts.common.aeron.AeronPollWorker;
 import com.ganten.peanuts.common.entity.ExecutionReport;
 import com.ganten.peanuts.common.entity.Order;
 import com.ganten.peanuts.common.entity.Trade;
@@ -32,6 +32,7 @@ public class AeronOrderSubscriber {
 
     private Subscription subscription;
     private final AtomicLong tradeIdGenerator = new AtomicLong(System.currentTimeMillis() * 1_000L);
+    private AeronPollWorker pollWorker;
 
     public AeronOrderSubscriber(MatchEngineProperties properties, AeronExecutionReportPublisher publisher,
             AeronTradePublisher tradePublisher, OrderDecoder orderDecoder, MatchService matchService) {
@@ -52,17 +53,13 @@ public class AeronOrderSubscriber {
             return;
         }
         subscription = publisher.aeron().addSubscription(properties.getChannel(), properties.getInboundStreamId());
+        startPollLoop();
         log.info("Order subscriber ready. channel={}, streamId={}", properties.getChannel(),
                 properties.getInboundStreamId());
     }
 
-    @Scheduled(fixedDelay = 100L)
-    public void poll() {
-        if (subscription == null) {
-            return;
-        }
-
-        FragmentHandler handler = (buffer, offset, length, header) -> {
+    private void startPollLoop() {
+        final FragmentHandler orderHandler = (buffer, offset, length, header) -> {
             Order order = orderDecoder.decode(buffer, offset);
             log.info("Order received, orderId={}, userId={}", order.getOrderId(), order.getUserId());
             List<ExecutionReport> reports = matchService.match(order);
@@ -74,12 +71,16 @@ public class AeronOrderSubscriber {
                 }
             }
         };
-
-        subscription.poll(handler, properties.getFragmentLimit());
+        pollWorker = AeronPollWorker.start("match-engine-order-poller",
+                () -> subscription.poll(orderHandler, properties.getFragmentLimit()),
+                ex -> log.error("Order subscriber poll loop failed", ex));
     }
 
     @PreDestroy
     public void shutdown() {
+        if (pollWorker != null) {
+            pollWorker.close();
+        }
         if (subscription != null) {
             subscription.close();
         }

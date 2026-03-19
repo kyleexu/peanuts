@@ -8,8 +8,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import com.ganten.peanuts.common.aeron.AeronPollWorker;
 import com.ganten.peanuts.common.entity.AccountLockRequest;
 import com.ganten.peanuts.common.entity.AccountLockResponse;
 import com.ganten.peanuts.common.entity.Order;
@@ -36,6 +36,7 @@ public class AccountLockAeronClient {
     private Aeron aeron;
     private Publication requestPublication;
     private Subscription responseSubscription;
+    private AeronPollWorker responsePollWorker;
 
     public AccountLockAeronClient(AeronProperties properties, AccountLockMessageCodec codec) {
         this.properties = properties;
@@ -48,6 +49,7 @@ public class AccountLockAeronClient {
         requestPublication = aeron.addPublication(properties.getChannel(), properties.getAccountLockRequestStreamId());
         responseSubscription =
                 aeron.addSubscription(properties.getChannel(), properties.getAccountLockResponseStreamId());
+        startResponsePollLoop();
     }
 
     public AccountLockResponse checkAndLock(Order order) {
@@ -68,19 +70,17 @@ public class AccountLockAeronClient {
         }
     }
 
-    @Scheduled(fixedDelay = 20L)
-    public void pollResponses() {
-        if (responseSubscription == null) {
-            return;
-        }
-        FragmentHandler handler = (buffer, offset, length, header) -> {
+    private void startResponsePollLoop() {
+        final FragmentHandler responseHandler = (buffer, offset, length, header) -> {
             AccountLockResponse response = codec.decodeResponse(buffer, offset);
             CompletableFuture<AccountLockResponse> future = pending.remove(Long.valueOf(response.getRequestId()));
             if (future != null) {
                 future.complete(response);
             }
         };
-        responseSubscription.poll(handler, 20);
+        responsePollWorker = AeronPollWorker.start("gateway-account-lock-response-poller",
+                () -> responseSubscription.poll(responseHandler, 20),
+                ex -> log.error("Account lock response poll loop failed", ex));
     }
 
     private AccountLockRequest buildRequest(Order order) {
@@ -116,6 +116,9 @@ public class AccountLockAeronClient {
 
     @PreDestroy
     public void shutdown() {
+        if (responsePollWorker != null) {
+            responsePollWorker.close();
+        }
         if (responseSubscription != null) {
             responseSubscription.close();
         }

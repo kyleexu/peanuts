@@ -3,11 +3,11 @@ package com.ganten.peanuts.account.messaging;
 import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
 import org.agrona.concurrent.UnsafeBuffer;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import com.ganten.peanuts.account.codec.AccountLockMessageCodec;
 import com.ganten.peanuts.account.config.AccountAeronProperties;
 import com.ganten.peanuts.account.service.AccountService;
+import com.ganten.peanuts.common.aeron.AeronPollWorker;
 import com.ganten.peanuts.common.entity.AccountLockRequest;
 import com.ganten.peanuts.common.entity.AccountLockResponse;
 import io.aeron.Aeron;
@@ -27,6 +27,7 @@ public class AccountLockAeronProcessor {
     private Aeron aeron;
     private Subscription requestSubscription;
     private Publication responsePublication;
+    private AeronPollWorker pollWorker;
 
     public AccountLockAeronProcessor(AccountAeronProperties properties, AccountService accountService,
             AccountLockMessageCodec codec) {
@@ -43,16 +44,13 @@ public class AccountLockAeronProcessor {
         aeron = Aeron.connect();
         requestSubscription = aeron.addSubscription(properties.getChannel(), properties.getLockRequestStreamId());
         responsePublication = aeron.addPublication(properties.getChannel(), properties.getLockResponseStreamId());
+        startPollLoop();
         log.info("Account lock Aeron processor ready. channel={}, reqStream={}, respStream={}", properties.getChannel(),
                 properties.getLockRequestStreamId(), properties.getLockResponseStreamId());
     }
 
-    @Scheduled(fixedDelay = 20L)
-    public void pollRequests() {
-        if (requestSubscription == null) {
-            return;
-        }
-        FragmentHandler handler = (buffer, offset, length, header) -> {
+    private void startPollLoop() {
+        final FragmentHandler requestHandler = (buffer, offset, length, header) -> {
             AccountLockRequest request = codec.decodeRequest(buffer, offset);
             boolean success = accountService.tryLock(request.getUserId(), request.getCurrency(), request.getAmount());
 
@@ -71,12 +69,16 @@ public class AccountLockAeronProcessor {
                 log.warn("Account lock response back pressured, requestId={}, code={}", request.getRequestId(), result);
             }
         };
-
-        requestSubscription.poll(handler, 50);
+        pollWorker =
+                AeronPollWorker.start("account-lock-aeron-poller", () -> requestSubscription.poll(requestHandler, 50),
+                        ex -> log.error("Account lock poll loop failed", ex));
     }
 
     @PreDestroy
     public void shutdown() {
+        if (pollWorker != null) {
+            pollWorker.close();
+        }
         if (requestSubscription != null) {
             requestSubscription.close();
         }
