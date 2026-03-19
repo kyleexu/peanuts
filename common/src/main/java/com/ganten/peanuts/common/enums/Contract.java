@@ -5,9 +5,9 @@ import lombok.Getter;
 @Getter
 public enum Contract {
     // btc/usdt
-    BTC_USD(1L, "BTC", "USDT", "BTCUSDT", 0.01, 1),
+    BTC_USDT(1L, "BTC", "USDT", "BTCUSDT", 0.01, 1),
     // eth/usdt
-    ETH_USD(2L, "ETH", "USDT", "ETHUSDT", 0.01, 1),
+    ETH_USDT(2L, "ETH", "USDT", "ETHUSDT", 0.01, 1),
     // usdt/usd
     USDT_USD(3L, "USDT", "USD", "USDTUSD", 0.0001, 1);
 

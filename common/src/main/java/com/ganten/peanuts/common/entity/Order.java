@@ -33,4 +33,7 @@ public class Order {
 
     // 订单时间戳
     private long timestamp;
+
+    // 订单来源
+    private Source source;
 }

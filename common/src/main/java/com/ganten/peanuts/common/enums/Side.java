@@ -2,7 +2,7 @@ package com.ganten.peanuts.common.enums;
 
 public enum Side {
     // sell side
-    ASK,
+    SELL,
     // buy side
-    BID;
+    BUY;
 }
