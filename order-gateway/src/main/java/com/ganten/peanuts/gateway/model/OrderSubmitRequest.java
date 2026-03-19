@@ -14,7 +14,9 @@ import com.ganten.peanuts.common.enums.*;
 //   "timeInForce": "GTC",
 //   "price": 45000,
 //   "totalQuantity": 2,
-//   "source": "API"
+//   "source": "API",
+//   "action": "NEW",
+//   "targetOrderId": 0
 // }
  */
 public class OrderSubmitRequest {
@@ -43,6 +45,8 @@ public class OrderSubmitRequest {
     private BigDecimal totalQuantity;
 
     private Source source;
+    private OrderAction action;
+    private Long targetOrderId;
 
     public Long getUserId() {
         return userId;
@@ -106,5 +110,21 @@ public class OrderSubmitRequest {
 
     public void setSource(Source source) {
         this.source = source;
+    }
+
+    public OrderAction getAction() {
+        return action;
+    }
+
+    public void setAction(OrderAction action) {
+        this.action = action;
+    }
+
+    public Long getTargetOrderId() {
+        return targetOrderId;
+    }
+
+    public void setTargetOrderId(Long targetOrderId) {
+        this.targetOrderId = targetOrderId;
     }
 }

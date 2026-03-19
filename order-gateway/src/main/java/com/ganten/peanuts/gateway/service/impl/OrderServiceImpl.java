@@ -6,6 +6,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.task.TaskExecutor;
 import org.springframework.stereotype.Service;
 import com.ganten.peanuts.common.entity.Order;
+import com.ganten.peanuts.common.enums.OrderAction;
 import com.ganten.peanuts.common.enums.OrderStatus;
 import com.ganten.peanuts.common.enums.Source;
 import com.ganten.peanuts.gateway.dispatcher.OrderDispatcher;
@@ -40,6 +41,13 @@ public class OrderServiceImpl implements OrderService {
         order.setTimestamp(System.currentTimeMillis());
         order.setOrderStatus(OrderStatus.NEW);
         order.setSource(request.getSource() == null ? Source.API : request.getSource());
+        order.setAction(request.getAction() == null ? OrderAction.NEW : request.getAction());
+        order.setTargetOrderId(request.getTargetOrderId() == null ? 0L : request.getTargetOrderId());
+
+        if ((order.getAction() == OrderAction.CANCEL || order.getAction() == OrderAction.MODIFY)
+                && order.getTargetOrderId() <= 0L) {
+            throw new IllegalArgumentException("targetOrderId is required for MODIFY/CANCEL action");
+        }
 
         return submitOrder(order);
     }
@@ -60,6 +68,9 @@ public class OrderServiceImpl implements OrderService {
         }
         if (order.getSource() == null) {
             order.setSource(Source.API);
+        }
+        if (order.getAction() == null) {
+            order.setAction(OrderAction.NEW);
         }
 
         orderDispatchExecutor.execute(new Runnable() {

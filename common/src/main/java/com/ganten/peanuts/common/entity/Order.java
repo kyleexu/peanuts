@@ -36,4 +36,10 @@ public class Order {
 
     // 订单来源
     private Source source;
+
+    // 订单动作：下单 / 改单 / 撤单
+    private OrderAction action;
+
+    // 改单/撤单的目标订单ID
+    private long targetOrderId;
 }

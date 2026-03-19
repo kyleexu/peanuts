@@ -1,0 +1,71 @@
+package com.ganten.peanuts.common.entity;
+
+import java.math.BigDecimal;
+import com.ganten.peanuts.common.enums.Contract;
+
+public class Trade {
+
+    private long tradeId;
+    private long buyOrderId;
+    private long sellOrderId;
+    private Contract contract;
+    private BigDecimal price;
+    private BigDecimal quantity;
+    private long timestamp;
+
+    public long getTradeId() {
+        return tradeId;
+    }
+
+    public void setTradeId(long tradeId) {
+        this.tradeId = tradeId;
+    }
+
+    public long getBuyOrderId() {
+        return buyOrderId;
+    }
+
+    public void setBuyOrderId(long buyOrderId) {
+        this.buyOrderId = buyOrderId;
+    }
+
+    public long getSellOrderId() {
+        return sellOrderId;
+    }
+
+    public void setSellOrderId(long sellOrderId) {
+        this.sellOrderId = sellOrderId;
+    }
+
+    public Contract getContract() {
+        return contract;
+    }
+
+    public void setContract(Contract contract) {
+        this.contract = contract;
+    }
+
+    public BigDecimal getPrice() {
+        return price;
+    }
+
+    public void setPrice(BigDecimal price) {
+        this.price = price;
+    }
+
+    public BigDecimal getQuantity() {
+        return quantity;
+    }
+
+    public void setQuantity(BigDecimal quantity) {
+        this.quantity = quantity;
+    }
+
+    public long getTimestamp() {
+        return timestamp;
+    }
+
+    public void setTimestamp(long timestamp) {
+        this.timestamp = timestamp;
+    }
+}

@@ -30,6 +30,12 @@ public class OrderEncoder {
                 order.getTotalQuantity() == null ? "" : order.getTotalQuantity().toPlainString());
         buffer.putLong(offset, order.getTimestamp());
         offset += 8;
+        buffer.putInt(offset, order.getSource() == null ? -1 : order.getSource().ordinal());
+        offset += 4;
+        buffer.putInt(offset, order.getAction() == null ? -1 : order.getAction().ordinal());
+        offset += 4;
+        buffer.putLong(offset, order.getTargetOrderId());
+        offset += 8;
 
         return new EncodedOrder(buffer, offset);
     }
