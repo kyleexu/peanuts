@@ -1,7 +1,5 @@
 package com.ganten.peanuts.protocol.aeron;
 
-import java.util.function.Consumer;
-
 import javax.annotation.PostConstruct;
 
 import org.agrona.DirectBuffer;
@@ -50,7 +48,7 @@ public abstract class AbstractAeronSubscriber<M, N extends AbstractCodec<M>> imp
         if (pollWorker != null) {
             pollWorker.close();
         }
-        aeron = Aeron.connect();
+        aeron = AeronRuntime.connect(properties);
         this.subscription = aeron.addSubscription(properties.getChannel(), properties.getStreamId());
         if (this.subscription == null) {
             log.error("Failed to create Aeron subscription");
@@ -89,5 +87,7 @@ public abstract class AbstractAeronSubscriber<M, N extends AbstractCodec<M>> imp
             subscription.close();
             subscription = null;
         }
+        AeronRuntime.close(properties, aeron);
+        aeron = null;
     }
 }

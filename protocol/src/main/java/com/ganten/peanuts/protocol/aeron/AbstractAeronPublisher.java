@@ -33,7 +33,7 @@ public abstract class AbstractAeronPublisher<M, N extends AbstractCodec<M>> impl
             return;
         }
         try {
-            aeron = Aeron.connect();
+            aeron = AeronRuntime.connect(properties);
             publication = aeron.addPublication(properties.getChannel(), properties.getStreamId());
             log.info("Aeron publisher ready. channel={}, streamId={}", properties.getChannel(),
                     properties.getStreamId());
@@ -75,10 +75,10 @@ public abstract class AbstractAeronPublisher<M, N extends AbstractCodec<M>> impl
     public void shutdown() {
         if (publication != null) {
             publication.close();
+            publication = null;
         }
-        if (aeron != null) {
-            aeron.close();
-        }
+        AeronRuntime.close(properties, aeron);
+        aeron = null;
     }
 
     @Override
