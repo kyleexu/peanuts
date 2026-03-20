@@ -8,7 +8,7 @@ import org.agrona.concurrent.UnsafeBuffer;
 import com.ganten.peanuts.common.enums.Contract;
 import com.ganten.peanuts.protocol.model.AeronMessage;
 import com.ganten.peanuts.protocol.model.OrderBookProto;
-import com.ganten.peanuts.protocol.model.OrderBookProto.OrderLevel;
+import com.ganten.peanuts.protocol.model.OrderBookProto.OrderSnapshot;
 
 public class OrderBookCodec extends AbstractCodec<OrderBookProto> {
 
@@ -57,7 +57,7 @@ public class OrderBookCodec extends AbstractCodec<OrderBookProto> {
         int buyCount = buffer.getInt(currentOffset);
         currentOffset += 4;
 
-        List<OrderLevel> bidOrders = new ArrayList<OrderLevel>(buyCount);
+        List<OrderSnapshot> bidOrders = new ArrayList<OrderSnapshot>(buyCount);
         for (int i = 0; i < buyCount; i++) {
             DecodeResult result = decodeOrder(buffer, currentOffset);
             currentOffset = result.nextOffset;
@@ -69,7 +69,7 @@ public class OrderBookCodec extends AbstractCodec<OrderBookProto> {
         int sellCount = buffer.getInt(currentOffset);
         currentOffset += 4;
 
-        List<OrderLevel> askOrders = new ArrayList<OrderLevel>(sellCount);
+        List<OrderSnapshot> askOrders = new ArrayList<OrderSnapshot>(sellCount);
         for (int i = 0; i < sellCount; i++) {
             DecodeResult result = decodeOrder(buffer, currentOffset);
             currentOffset = result.nextOffset;
@@ -83,12 +83,12 @@ public class OrderBookCodec extends AbstractCodec<OrderBookProto> {
         return snapshot;
     }
 
-    private int encodeSide(UnsafeBuffer buffer, int offset, List<OrderLevel> orders) {
+    private int encodeSide(UnsafeBuffer buffer, int offset, List<OrderSnapshot> orders) {
         int count = 0;
         int countOffset = offset;
         offset += 4;
 
-        for (OrderLevel order : orders) {
+        for (OrderSnapshot order : orders) {
             if (count >= MAX_ORDERS_PER_SIDE) {
                 break;
             }
@@ -144,7 +144,7 @@ public class OrderBookCodec extends AbstractCodec<OrderBookProto> {
             return new DecodeResult(null, currentOffset);
         }
 
-        OrderLevel order = new OrderLevel();
+        OrderSnapshot order = new OrderSnapshot();
         order.setOrderId(orderId);
         order.setUserId(userId);
         order.setPrice(price);
@@ -156,10 +156,10 @@ public class OrderBookCodec extends AbstractCodec<OrderBookProto> {
     }
 
     private static final class DecodeResult {
-        private final OrderLevel order;
+        private final OrderSnapshot order;
         private final int nextOffset;
 
-        private DecodeResult(OrderLevel order, int nextOffset) {
+        private DecodeResult(OrderSnapshot order, int nextOffset) {
             this.order = order;
             this.nextOffset = nextOffset;
         }

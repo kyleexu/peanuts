@@ -12,7 +12,7 @@ import com.ganten.peanuts.market.model.MarketMessage;
 import com.ganten.peanuts.market.model.OrderBookSnapshot;
 import com.ganten.peanuts.market.websocket.WebSocketBroadcaster;
 import com.ganten.peanuts.protocol.model.OrderBookProto;
-import com.ganten.peanuts.protocol.model.OrderBookProto.OrderLevel;
+import com.ganten.peanuts.protocol.model.OrderBookProto.OrderSnapshot;
 
 @Service
 public class OrderBookService {
@@ -88,7 +88,7 @@ public class OrderBookService {
         BigDecimal levelStep = tickSize.multiply(new BigDecimal(levelMultiplier));
 
         Map<BigDecimal, BigDecimal> bidLevels = new TreeMap<BigDecimal, BigDecimal>(Collections.reverseOrder());
-        for (OrderLevel order : raw.getBidOrders()) {
+        for (OrderSnapshot order : raw.getBidOrders()) {
             if (order.getPrice() == null || order.getRemainingQuantity() == null
                     || order.getRemainingQuantity().signum() <= 0) {
                 continue;
@@ -98,7 +98,7 @@ public class OrderBookService {
         }
 
         Map<BigDecimal, BigDecimal> askLevels = new TreeMap<BigDecimal, BigDecimal>();
-        for (OrderLevel order : raw.getAskOrders()) {
+        for (OrderSnapshot order : raw.getAskOrders()) {
             if (order.getPrice() == null || order.getRemainingQuantity() == null
                     || order.getRemainingQuantity().signum() <= 0) {
                 continue;

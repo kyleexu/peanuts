@@ -11,7 +11,7 @@ import com.ganten.peanuts.engine.model.OrderBook;
 import com.ganten.peanuts.protocol.model.OrderBookProto;
 import com.ganten.peanuts.protocol.model.OrderProto;
 import com.ganten.peanuts.protocol.model.TradeProto;
-import com.ganten.peanuts.protocol.model.OrderBookProto.OrderLevel;
+import com.ganten.peanuts.protocol.model.OrderBookProto.OrderSnapshot;
 
 public class ProtocolModelMapper {
 
@@ -56,10 +56,10 @@ public class ProtocolModelMapper {
         return snapshot;
     }
 
-    private static List<OrderLevel> toOrderLevels(PriorityQueue<Order> orders) {
-        List<OrderLevel> levels = new ArrayList<OrderLevel>(orders.size());
+    private static List<OrderSnapshot> toOrderLevels(PriorityQueue<Order> orders) {
+        List<OrderSnapshot> levels = new ArrayList<OrderSnapshot>(orders.size());
         for (Order order : orders) {
-            OrderLevel level = new OrderLevel();
+            OrderSnapshot level = new OrderSnapshot();
             level.setOrderId(order.getOrderId());
             level.setUserId(order.getUserId());
             level.setPrice(order.getPrice());

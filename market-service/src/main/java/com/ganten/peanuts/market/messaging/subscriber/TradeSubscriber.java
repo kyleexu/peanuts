@@ -34,7 +34,7 @@ public class TradeSubscriber extends AbstractAeronSubscriber<TradeProto, TradeCo
 
     /**
      * 第 16 步，消费成交，并更新市场数据
-     * 关键: 这里需要使用 marketDataService 更新市场数据
+     * 关键: 这里需要使用 tickerService 和 candleService 更新市场数据，然后推送到 WebSocket 客户端
      */
     @Override
     protected void onMessage(TradeProto message) {
