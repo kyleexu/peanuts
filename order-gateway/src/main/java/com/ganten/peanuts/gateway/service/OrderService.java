@@ -30,6 +30,9 @@ public class OrderService {
         this.orderDispatchExecutor = orderDispatchExecutor;
     }
 
+    /**
+     * 第 2 步，将订单请求转换为订单实体
+     */
     public AcceptedResponse submitOrder(OrderSubmitRequest request) {
         Order order = new Order();
         order.setOrderId(System.nanoTime());
@@ -83,8 +86,18 @@ public class OrderService {
             }
         }
 
+        /**
+         * 第 7 步，执行订单，并发布订单
+         * 关键: 这里会异步执行订单，并发布订单
+         * 这里需要使用 TaskExecutor 异步执行订单，并发布订单
+         */
         orderDispatchExecutor.execute(() -> orderPublisher.offer(OrderProtocolMapper.toProto(order)));
 
+        /**
+         * 第 8 步，返回订单接受响应
+         * 关键: 这里需要返回订单接受响应，并设置订单接受响应的跟踪ID
+         * 这里需要使用 AcceptedResponse 返回订单接受响应
+         */
         AcceptedResponse response = new AcceptedResponse();
         response.setTrackingId(UUID.randomUUID().toString());
         response.setMessage("Order accepted for async dispatch");

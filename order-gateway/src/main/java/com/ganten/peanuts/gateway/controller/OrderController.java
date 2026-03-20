@@ -20,6 +20,9 @@ public class OrderController {
         this.orderService = orderService;
     }
 
+    /**
+     * 第 1 步，通过 HTTP 接口接收订单请求
+     */
     @PostMapping
     public ResponseEntity<AcceptedResponse> submitOrder(@Valid @RequestBody OrderSubmitRequest request) {
         AcceptedResponse response = orderService.submitOrder(request);

@@ -6,10 +6,15 @@ import com.ganten.peanuts.common.enums.ExecType;
 import com.ganten.peanuts.protocol.model.ExecutionReportProto;
 
 public class ExecutionReportBuilder {
-    public static ExecutionReportProto buildTradeReport(Order order, long counterpartyOrderId, BigDecimal matchedPrice,
-            BigDecimal matchedQuantity) {
+    /**
+     * 构建交易执行报告
+     */
+    public static ExecutionReportProto buildTradeReport(Order order, long buyOrderId, long sellOrderId, BigDecimal matchedPrice,
+            BigDecimal matchedQuantity, long tradeId) {
         ExecutionReportProto report = buildReport(order, ExecType.TRADE, matchedPrice, matchedQuantity);
-        report.setCounterpartyOrderId(counterpartyOrderId);
+        report.setBuyOrderId(buyOrderId);
+        report.setSellOrderId(sellOrderId);
+        report.setTradeId(tradeId);
         return report;
     }
 

@@ -36,6 +36,11 @@ public class OrderBookAggregationService {
             return;
         }
 
+        /**
+         * 第 12 步，将订单簿快照存储到 rawSnapshots 中，用于后续的订单簿聚合
+         * 然后按照 Constants.multiplierList 中的倍数进行订单簿聚合，并存储到 snapshotsByLevel 中。
+         * 最后，将默认级别的订单簿快照推送到 WebSocket 客户端。
+         */
         rawSnapshots.put(snapshot.getContract(), snapshot);
 
         for (int levelMultiplier : Constants.multiplierList) {

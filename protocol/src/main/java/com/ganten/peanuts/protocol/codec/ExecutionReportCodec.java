@@ -24,9 +24,13 @@ public class ExecutionReportCodec extends AbstractCodec<ExecutionReportProto> {
         int offset = 0;
         buffer.putLong(offset, report.getOrderId());
         offset += 8;
+        buffer.putLong(offset, report.getTradeId());
+        offset += 8;
         buffer.putLong(offset, report.getUserId());
         offset += 8;
-        buffer.putLong(offset, report.getCounterpartyOrderId());
+        buffer.putLong(offset, report.getBuyOrderId());
+        offset += 8;
+        buffer.putLong(offset, report.getSellOrderId());
         offset += 8;
         buffer.putInt(offset, report.getContract().ordinal());
         offset += 4;
@@ -54,7 +58,14 @@ public class ExecutionReportCodec extends AbstractCodec<ExecutionReportProto> {
         currentOffset += 8;
         report.setUserId(buffer.getLong(currentOffset));
         currentOffset += 8;
-        report.setCounterpartyOrderId(buffer.getLong(currentOffset));
+        
+        report.setTradeId(buffer.getLong(currentOffset));
+        currentOffset += 8;
+        report.setBuyOrderId(buffer.getLong(currentOffset));
+        currentOffset += 8;
+        report.setSellOrderId(buffer.getLong(currentOffset));
+        currentOffset += 8;
+
         currentOffset += 8;
         report.setContract(com.ganten.peanuts.common.enums.Contract.values()[buffer.getInt(currentOffset)]);
         currentOffset += 4;

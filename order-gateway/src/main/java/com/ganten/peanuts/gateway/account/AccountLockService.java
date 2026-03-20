@@ -1,22 +1,19 @@
 package com.ganten.peanuts.gateway.account;
 
-import java.math.BigDecimal;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
-import javax.annotation.PreDestroy;
-import org.springframework.stereotype.Component;
-import org.springframework.beans.factory.annotation.Qualifier;
 
-import com.ganten.peanuts.common.entity.Order;
-import com.ganten.peanuts.common.enums.Currency;
-import com.ganten.peanuts.common.enums.Side;
+import org.springframework.stereotype.Component;
+
 import com.ganten.peanuts.common.constant.Constants;
+import com.ganten.peanuts.common.entity.Order;
+import com.ganten.peanuts.gateway.mapping.LockRequestProtocolMapper;
+import com.ganten.peanuts.gateway.messaging.publisher.LockRequestPublisher;
 import com.ganten.peanuts.protocol.model.LockRequestProto;
 import com.ganten.peanuts.protocol.model.LockResponseProto;
-import com.ganten.peanuts.gateway.messaging.publisher.LockRequestPublisher;
+
 import lombok.extern.slf4j.Slf4j;
-import com.ganten.peanuts.gateway.messaging.subscriber.LockResponseSubscriber;
 
 /**
  * Gateway-side orchestration for account lock request/response.
@@ -25,67 +22,44 @@ import com.ganten.peanuts.gateway.messaging.subscriber.LockResponseSubscriber;
 @Component
 public class AccountLockService {
 
-    private final AccountLockPendingRequests pendingRequests;
+    // 使用这个 publisher 发送锁请求
     private final LockRequestPublisher requestPublisher;
-    private final LockResponseSubscriber responseSubscriber;
 
+    // 使用这个 store 存储锁请求的 future 响应结果，用于等待锁响应
+    private final LockPendingRequests lockPendingRequests;
+
+    // 使用这个 generator 生成锁请求的 requestId
     private final AtomicLong requestIdGenerator = new AtomicLong(1L);
 
-    public AccountLockService(
-            @Qualifier("accountLockAeronResponseProperties") LockResponseSubscriber responseSubscriber,
-            @Qualifier("accountLockAeronRequestProperties") LockRequestPublisher requestPublisher,
-            AccountLockPendingRequests pendingRequests) {
-        this.responseSubscriber = responseSubscriber;
+    public AccountLockService(LockPendingRequests lockPendingRequests,
+            LockRequestPublisher requestPublisher) {
+        this.lockPendingRequests = lockPendingRequests;
         this.requestPublisher = requestPublisher;
-        this.pendingRequests = pendingRequests;
     }
 
+    /**
+     * 第 3 步，构建锁请求并发送给 account-service 并等待锁响应
+     * Aeron: order-gateway -> account-service
+     */
     public LockResponseProto checkAndLock(Order order) {
-        LockRequestProto request = this.buildRequest(order);
-        long requestId = request.getRequestId();
-        CompletableFuture<LockResponseProto> future = pendingRequests.put(requestId);
+        long requestId = requestIdGenerator.getAndIncrement();
+        LockRequestProto request = LockRequestProtocolMapper.toLockRequest(
+                order, requestId, System.currentTimeMillis());
+        CompletableFuture<LockResponseProto> future = lockPendingRequests.put(requestId);
+        LockResponseProto response;
         try {
             requestPublisher.offer(request);
-            return future.get(Constants.ACCOUNT_LOCK_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+            /**
+             * 第 6 步，等待锁响应，拿到锁响应结果后
+             * 关键: 这里会阻塞等待锁响应，直到锁响应返回或超时
+             */
+            response = future.get(Constants.ACCOUNT_LOCK_TIMEOUT_MS, TimeUnit.MILLISECONDS);
         } catch (Exception ex) {
-            pendingRequests.remove(requestId);
-            return fail(requestId, "account lock request timeout or failed: " + ex.getMessage());
+            log.error("Lock request failed, requestId={}, error={}", requestId, ex.getMessage());
+            lockPendingRequests.remove(requestId);
+            response = LockRequestProtocolMapper.toFailureResponse(
+                    requestId, "account lock request timeout or failed: " + ex.getMessage());
         }
-    }
-
-    private LockRequestProto buildRequest(Order order) {
-        Currency currency;
-        BigDecimal amount;
-        if (order.getSide() == Side.BUY) {
-            if (order.getPrice() == null) {
-                throw new IllegalArgumentException("buy order price required for account lock");
-            }
-            currency = order.getContract().getQuote();
-            amount = order.getPrice().multiply(order.getTotalQuantity());
-        } else {
-            currency = order.getContract().getBase();
-            amount = order.getTotalQuantity();
-        }
-
-        LockRequestProto request = new LockRequestProto();
-        request.setRequestId(requestIdGenerator.getAndIncrement());
-        request.setUserId(order.getUserId());
-        request.setCurrency(currency);
-        request.setAmount(amount);
-        request.setTimestamp(System.currentTimeMillis());
-        return request;
-    }
-
-    private LockResponseProto fail(long requestId, String message) {
-        LockResponseProto response = new LockResponseProto();
-        response.setRequestId(requestId);
-        response.setSuccess(false);
-        response.setMessage(message);
         return response;
-    }
-
-    @PreDestroy
-    public void shutdown() {
-        // No-op: Aeron resources are owned by publisher/subscriber components.
     }
 }

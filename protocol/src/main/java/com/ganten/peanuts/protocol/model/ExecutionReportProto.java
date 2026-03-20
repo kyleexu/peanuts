@@ -9,7 +9,9 @@ import com.ganten.peanuts.common.enums.Side;
 public class ExecutionReportProto {
 
     private long orderId;
-    private long counterpartyOrderId;
+    private long tradeId;
+    private long buyOrderId;
+    private long sellOrderId;
     private long userId;
     private Contract contract;
     private Side side;
@@ -27,12 +29,28 @@ public class ExecutionReportProto {
         this.orderId = orderId;
     }
 
-    public long getCounterpartyOrderId() {
-        return counterpartyOrderId;
+    public long getTradeId() {
+        return tradeId;
     }
 
-    public void setCounterpartyOrderId(long counterpartyOrderId) {
-        this.counterpartyOrderId = counterpartyOrderId;
+    public void setTradeId(long tradeId) {
+        this.tradeId = tradeId;
+    }
+
+    public long getBuyOrderId() {
+        return buyOrderId;
+    }
+
+    public void setBuyOrderId(long buyOrderId) {
+        this.buyOrderId = buyOrderId;
+    }
+
+    public long getSellOrderId() {
+        return sellOrderId;
+    }
+
+    public void setSellOrderId(long sellOrderId) {
+        this.sellOrderId = sellOrderId;
     }
 
     public long getUserId() {

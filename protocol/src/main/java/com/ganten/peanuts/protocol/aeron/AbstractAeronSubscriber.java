@@ -38,7 +38,7 @@ public abstract class AbstractAeronSubscriber<M, N extends AbstractCodec<M>> imp
     }
 
     protected abstract void onMessage(M message);
-    
+
     @PostConstruct
     protected void start() {
         if (!properties.isEnabled()) {
@@ -64,19 +64,19 @@ public abstract class AbstractAeronSubscriber<M, N extends AbstractCodec<M>> imp
                     this.onMessage(message);
                 }
             } catch (Throwable t) {
-                this.errorHandler().accept(t);
+                this.errorHandler(t);
             }
         };
 
         this.pollWorker = AeronPollWorker.start(
                 () -> this.subscription.poll(fragmentHandler, properties.getFragmentLimit()),
-                this.errorHandler());
+                this::errorHandler);
         log.info("Aeron subscriber ready. channel={}, streamId={}",
                 properties.getChannel(), properties.getStreamId());
     }
 
-    protected Consumer<Throwable> errorHandler() {
-        return (throwable) -> log.error("Aeron poll loop failed", throwable);
+    protected void errorHandler(Throwable t) {
+        log.error("Aeron poll loop failed", t);
     }
 
     @Override

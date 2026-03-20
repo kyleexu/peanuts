@@ -2,17 +2,28 @@ package com.ganten.peanuts.engine.service;
 
 import java.math.BigDecimal;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicLong;
 import org.springframework.stereotype.Service;
 import com.ganten.peanuts.common.entity.Order;
 import com.ganten.peanuts.common.enums.*;
+import com.ganten.peanuts.engine.messaging.publisher.ExecutionReportPublisher;
+import com.ganten.peanuts.engine.messaging.publisher.TradePublisher;
 import com.ganten.peanuts.engine.model.OrderBook;
 import com.ganten.peanuts.engine.utils.ExecutionReportBuilder;
-import com.ganten.peanuts.protocol.model.ExecutionReportProto;
+import com.ganten.peanuts.protocol.model.TradeProto;
 
 @Service
 public class MatchService {
 
     private final Map<Contract, OrderBook> books = new HashMap<Contract, OrderBook>();
+    private final ExecutionReportPublisher executionReportPublisher;
+    private final TradePublisher tradePublisher;
+    private final AtomicLong tradeIdGenerator = new AtomicLong(System.currentTimeMillis() * 1_000L);
+
+    public MatchService(ExecutionReportPublisher executionReportPublisher, TradePublisher tradePublisher) {
+        this.executionReportPublisher = executionReportPublisher;
+        this.tradePublisher = tradePublisher;
+    }
 
     /**
      * 获取指定合约的订单簿（已同步）
@@ -24,17 +35,21 @@ public class MatchService {
         return orderBook(contract);
     }
 
-    public synchronized List<ExecutionReportProto> match(Order order) {
-        normalize(order);
+    public synchronized void match(Order order) {
+        // 修复订单状态、动作、目标订单ID
+        this.normalize(order);
 
+        // 如果是取消订单，那就直接取消
         if (order.getAction() == OrderAction.CANCEL) {
-            return cancel(order);
+            this.cancel(order);
+            return;
         }
+        // 如果是修改订单，需要先取消目标订单，然后创建新订单，然后进行撮合
         if (order.getAction() == OrderAction.MODIFY) {
             long targetOrderId = resolveTargetOrderId(order);
             Order canceledOrder = cancelExisting(order.getContract(), targetOrderId);
             if (canceledOrder == null) {
-                return Collections.emptyList();
+                return;
             }
             order.setOrderId(targetOrderId);
             order.setFilledQuantity(BigDecimal.ZERO);
@@ -42,14 +57,14 @@ public class MatchService {
             order.setAction(OrderAction.NEW);
         }
 
-        return newOrder(order);
+        // 如果不是取消或修改订单，则是新到达的订单，需要进行撮合
+        this.newOrder(order);
     }
 
-    private List<ExecutionReportProto> newOrder(Order incomingOrder) {
-        List<ExecutionReportProto> reports = new ArrayList<ExecutionReportProto>();
+    private void newOrder(Order incomingOrder) {
         OrderBook book = this.orderBook(incomingOrder.getContract());
-        PriorityQueue<Order> oppositeQueue =
-                incomingOrder.getSide() == Side.BUY ? book.getSellOrders() : book.getBuyOrders();
+        PriorityQueue<Order> oppositeQueue = incomingOrder.getSide() == Side.BUY ? book.getSellOrders()
+                : book.getBuyOrders();
 
         while (!oppositeQueue.isEmpty() && remaining(incomingOrder).compareTo(BigDecimal.ZERO) > 0) {
             Order restingOrder = oppositeQueue.peek();
@@ -60,14 +75,10 @@ public class MatchService {
             BigDecimal matchedQuantity = remaining(incomingOrder).min(remaining(restingOrder));
             BigDecimal matchedPrice = restingOrder.getPrice();
 
-            fill(incomingOrder, matchedQuantity);
-            fill(restingOrder, matchedQuantity);
-
-            reports.add(ExecutionReportBuilder.buildTradeReport(incomingOrder, restingOrder.getOrderId(), matchedPrice,
-                    matchedQuantity));
-            reports.add(ExecutionReportBuilder.buildTradeReport(restingOrder, incomingOrder.getOrderId(), matchedPrice,
-                    matchedQuantity));
-
+            this.fill(incomingOrder, matchedQuantity);
+            this.fill(restingOrder, matchedQuantity);
+            
+            this.publishTrade(incomingOrder, restingOrder, matchedPrice, matchedQuantity);
             if (remaining(restingOrder).compareTo(BigDecimal.ZERO) == 0) {
                 oppositeQueue.poll();
                 book.getOrdersById().remove(restingOrder.getOrderId());
@@ -84,20 +95,77 @@ public class MatchService {
         } else {
             incomingOrder.setOrderStatus(OrderStatus.FILLED);
         }
-
-        return reports;
     }
 
-    private List<ExecutionReportProto> cancel(Order cancelOrder) {
-        List<ExecutionReportProto> reports = new ArrayList<ExecutionReportProto>();
+    /**
+     * 发布交易和交易执行报告
+     * </p>
+     * 
+     * @param incomingOrder   新到达的订单
+     * @param restingOrder    待成交的订单
+     * @param matchedPrice    成交价格
+     * @param matchedQuantity 成交数量
+     */
+    private void publishTrade(Order incomingOrder, Order restingOrder, BigDecimal matchedPrice,
+            BigDecimal matchedQuantity) {
+
+        TradeProto trade = new TradeProto();
+        long tradeId = tradeIdGenerator.incrementAndGet();
+        trade.setTradeId(tradeId);
+        if (incomingOrder.getSide() == Side.BUY) {
+            trade.setBuyOrderId(incomingOrder.getOrderId());
+            trade.setSellOrderId(restingOrder.getOrderId());
+            trade.setBuyUserId(incomingOrder.getUserId());
+            trade.setSellUserId(restingOrder.getUserId());
+        } else {
+            trade.setBuyOrderId(restingOrder.getOrderId());
+            trade.setSellOrderId(incomingOrder.getOrderId());
+            trade.setBuyUserId(restingOrder.getUserId());
+            trade.setSellUserId(incomingOrder.getUserId());
+        }
+        trade.setContract(incomingOrder.getContract());
+        trade.setPrice(matchedPrice);
+        trade.setQuantity(matchedQuantity);
+        trade.setTimestamp(System.currentTimeMillis());
+
+        /**
+         * 发布交易
+         */
+        tradePublisher.offer(trade);
+
+        /**
+         * 发布交易执行报告，对于成交的订单，需要发布两条交易执行报告
+         * 一条是买入订单的执行报告
+         * 一条是卖出订单的执行报告
+         * 两条交易执行报告的 tradeId 相同
+         */
+        executionReportPublisher.offer(
+                ExecutionReportBuilder.buildTradeReport(
+                        incomingOrder,
+                        trade.getBuyOrderId(),
+                        trade.getSellOrderId(),
+                        matchedPrice,
+                        matchedQuantity,
+                        tradeId));
+        executionReportPublisher.offer(
+                ExecutionReportBuilder.buildTradeReport(
+                        restingOrder,
+                        trade.getBuyOrderId(),
+                        trade.getSellOrderId(),
+                        matchedPrice,
+                        matchedQuantity,
+                        tradeId));
+    }
+
+    private void cancel(Order cancelOrder) {
         long targetOrderId = resolveTargetOrderId(cancelOrder);
         Order existingOrder = cancelExisting(cancelOrder.getContract(), targetOrderId);
         if (existingOrder != null) {
             existingOrder.setOrderStatus(OrderStatus.CANCELED);
-            reports.add(ExecutionReportBuilder.buildReport(existingOrder, ExecType.CANCELED, existingOrder.getPrice(),
-                    BigDecimal.ZERO));
+            executionReportPublisher.offer(
+                    ExecutionReportBuilder.buildReport(existingOrder, ExecType.CANCELED, existingOrder.getPrice(),
+                            BigDecimal.ZERO));
         }
-        return reports;
     }
 
     private Order cancelExisting(Contract contract, long targetOrderId) {

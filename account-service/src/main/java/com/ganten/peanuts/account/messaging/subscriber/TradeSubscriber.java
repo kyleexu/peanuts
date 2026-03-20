@@ -16,11 +16,11 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Component
-public class AccountTradeAeronSubscriber extends AbstractAeronSubscriber<TradeProto, TradeCodec> {
+public class TradeSubscriber extends AbstractAeronSubscriber<TradeProto, TradeCodec> {
 
     private final AccountService accountService;
 
-    public AccountTradeAeronSubscriber(@Qualifier("tradeSubscriber") AeronProperties aeronProperties,
+    public TradeSubscriber(@Qualifier("tradeSubscriber") AeronProperties aeronProperties,
             AccountService accountService) {
         super(aeronProperties, TradeCodec.getInstance());
         this.accountService = accountService;
