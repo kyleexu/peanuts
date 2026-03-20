@@ -15,7 +15,7 @@ public class MatchEngineBeanConfiguration {
         aeronProperties.setStreamId(Constants.AERON_STREAM_ID_EXECUTION_REPORT);
         aeronProperties.setChannel(Constants.AERON_CHANNEL);
         aeronProperties.setEnabled(Constants.AERON_ENABLED);
-        aeronProperties.setLaunchEmbeddedDriver(Constants.AERON_LAUNCH_EMBEDDED_DRIVER);
+        aeronProperties.setLaunchEmbeddedDriver(Constants.AERON_LAUNCH_EMBEDDED_DRIVER_MATCH_ENGINE);
         aeronProperties.setDirectory(Constants.AERON_DIRECTORY);
         aeronProperties.setFragmentLimit(Constants.AERON_FRAGMENT_LIMIT);
         return aeronProperties;
@@ -27,7 +27,7 @@ public class MatchEngineBeanConfiguration {
         aeronProperties.setStreamId(Constants.AERON_STREAM_ID_ORDER_BOOK);
         aeronProperties.setChannel(Constants.AERON_CHANNEL);
         aeronProperties.setEnabled(Constants.AERON_ENABLED);
-        aeronProperties.setLaunchEmbeddedDriver(Constants.AERON_LAUNCH_EMBEDDED_DRIVER);
+        aeronProperties.setLaunchEmbeddedDriver(Constants.AERON_LAUNCH_EMBEDDED_DRIVER_MATCH_ENGINE);
         aeronProperties.setDirectory(Constants.AERON_DIRECTORY);
         aeronProperties.setFragmentLimit(Constants.AERON_FRAGMENT_LIMIT);
         return aeronProperties;
@@ -39,7 +39,7 @@ public class MatchEngineBeanConfiguration {
         aeronProperties.setStreamId(Constants.AERON_STREAM_ID_TRADE);
         aeronProperties.setChannel(Constants.AERON_CHANNEL);
         aeronProperties.setEnabled(Constants.AERON_ENABLED);
-        aeronProperties.setLaunchEmbeddedDriver(Constants.AERON_LAUNCH_EMBEDDED_DRIVER);
+        aeronProperties.setLaunchEmbeddedDriver(Constants.AERON_LAUNCH_EMBEDDED_DRIVER_MATCH_ENGINE);
         aeronProperties.setDirectory(Constants.AERON_DIRECTORY);
         aeronProperties.setFragmentLimit(Constants.AERON_FRAGMENT_LIMIT);
         return aeronProperties;
@@ -51,7 +51,7 @@ public class MatchEngineBeanConfiguration {
         aeronProperties.setStreamId(Constants.AERON_STREAM_ID_ORDER);
         aeronProperties.setChannel(Constants.AERON_CHANNEL);
         aeronProperties.setEnabled(Constants.AERON_ENABLED);
-        aeronProperties.setLaunchEmbeddedDriver(Constants.AERON_LAUNCH_EMBEDDED_DRIVER);
+        aeronProperties.setLaunchEmbeddedDriver(Constants.AERON_LAUNCH_EMBEDDED_DRIVER_MATCH_ENGINE);
         aeronProperties.setDirectory(Constants.AERON_DIRECTORY);
         aeronProperties.setFragmentLimit(Constants.AERON_FRAGMENT_LIMIT);
         return aeronProperties;

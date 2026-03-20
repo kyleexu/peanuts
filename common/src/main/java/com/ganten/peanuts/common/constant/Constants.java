@@ -13,7 +13,8 @@ public class Constants {
 
     public static final String AERON_CHANNEL = "aeron:ipc";
     public static final boolean AERON_ENABLED = true;
-    public static final boolean AERON_LAUNCH_EMBEDDED_DRIVER = true;
+    public static final boolean AERON_LAUNCH_EMBEDDED_DRIVER = false;
+    public static final boolean AERON_LAUNCH_EMBEDDED_DRIVER_MATCH_ENGINE = true;
     public static final String AERON_DIRECTORY = CommonContext.getAeronDirectoryName();
     public static final int AERON_FRAGMENT_LIMIT = 10;
     public static final int AERON_FRAGMENT_LIMIT_LOCK_RESPONSE = 20;
