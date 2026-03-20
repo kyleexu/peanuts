@@ -1,29 +1,29 @@
-package com.ganten.peanuts.gateway.dispatcher;
+package com.ganten.peanuts.gateway.messaging.publisher;
 
 import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
 import org.springframework.stereotype.Component;
 import com.ganten.peanuts.common.entity.Order;
 import com.ganten.peanuts.gateway.config.AeronProperties;
-import com.ganten.peanuts.protocol.codec.OrderEncoder;
-import com.ganten.peanuts.protocol.model.EncodedMessage;
+import com.ganten.peanuts.gateway.mapping.OrderProtocolMapper;
+import com.ganten.peanuts.protocol.codec.OrderCodec;
+import com.ganten.peanuts.protocol.model.AeronMessage;
+import com.ganten.peanuts.protocol.model.OrderProto;
 import io.aeron.Aeron;
 import io.aeron.Publication;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Component
-public class AeronOrderDispatcher implements OrderDispatcher {
+public class AeronOrderPublisher  {
 
     private final AeronProperties aeronProperties;
-    private final OrderEncoder orderEncoder;
 
     private Aeron aeron;
     private Publication publication;
 
-    public AeronOrderDispatcher(AeronProperties aeronProperties, OrderEncoder orderEncoder) {
+    public AeronOrderPublisher(AeronProperties aeronProperties) {
         this.aeronProperties = aeronProperties;
-        this.orderEncoder = orderEncoder;
     }
 
     @PostConstruct
@@ -42,8 +42,8 @@ public class AeronOrderDispatcher implements OrderDispatcher {
         }
     }
 
-    @Override
-    public void dispatch(Order order) {
+
+    public void publish(Order order) {
         if (!aeronProperties.isEnabled()) {
             log.debug("Skip dispatch because Aeron is disabled, orderId={}", order.getOrderId());
             return;
@@ -53,7 +53,8 @@ public class AeronOrderDispatcher implements OrderDispatcher {
             return;
         }
 
-        EncodedMessage encoded = orderEncoder.encode(order);
+        OrderProto proto = OrderProtocolMapper.toProto(order);
+        AeronMessage encoded = OrderCodec.getInstance().encode(proto);
         long result = publication.offer(encoded.getBuffer(), 0, encoded.getLength());
         if (result > 0) {
             log.info("Dispatched order successfully, orderId={}, result={}", order.getOrderId(), result);

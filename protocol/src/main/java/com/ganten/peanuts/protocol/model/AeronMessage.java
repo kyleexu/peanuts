@@ -2,12 +2,12 @@ package com.ganten.peanuts.protocol.model;
 
 import org.agrona.concurrent.UnsafeBuffer;
 
-public class EncodedMessage {
+public class AeronMessage {
 
     private final UnsafeBuffer buffer;
     private final int length;
 
-    public EncodedMessage(UnsafeBuffer buffer, int length) {
+    public AeronMessage(UnsafeBuffer buffer, int length) {
         this.buffer = buffer;
         this.length = length;
     }

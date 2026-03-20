@@ -9,11 +9,13 @@
 项目里主要有两类 Aeron 交互语义：
 
 1. 请求-响应（Request/Response）
+
 - 示例：order-gateway 请求 account-service 做资金锁定。
 - 发送端通过 `Publication.offer(...)` 发请求。
 - 再通过响应流读取对应 `requestId` 的结果并等待完成。
 
-2. 单向分发（One-way / Fire-and-forget）
+1. 单向分发（One-way / Fire-and-forget）
+
 - 示例：order-gateway 向 match-engine 异步分发订单。
 - 仅 `offer(...)` 投递，不等待回包。
 
@@ -26,21 +28,45 @@
 1. order-gateway 收到下单请求。
 2. `AccountLockAeronClient` 发锁定请求到 account-service。
 3. account-service 消费请求并返回锁定结果。
-4. 锁定成功后，order-gateway 通过 `AeronOrderDispatcher` 分发订单到 match-engine。
-5. match-engine 订阅订单并撮合。
-6. match-engine 发布 execution report 与 trade。
+4. 锁定成功后，order-gateway 通过 `AeronOrderDispatcher` 分发订单到 match-engine（发送端：`Order` -> `protocol.OrderCommand` -> `OrderCodec.encode` -> Aeron `offer(...)`）。
+5. match-engine 的 `AeronOrderSubscriber` 订阅订单并撮合（接收端：`OrderCodec.decode` 解码 `OrderCommand` -> 映射为 domain `Order` -> `matchService.match(...)`）。
+6. match-engine 发布两类下游数据：
+  - 执行回报 execution report：`AeronExecutionReportPublisher`（协议模型在 `protocol.model.ExecutionReport`）。
+  - 成交 trade：`AeronTradePublisher`（domain `Trade` -> `protocol.TradeEvent` -> `TradeCodec.encode`）。
+7. match-engine 还会发布订单簿快照到下游（domain `OrderBook` -> `protocol.RawOrderBookSnapshot` -> `OrderBookCodec.encode`）。
+8. account-service 的 `AccountTradeAeronProcessor` 消费成交流（`TradeCodec.decode` 解码 `TradeEvent` -> 映射为 domain `Trade` -> `accountService.applyTrade(...)`）。
+9. market-service 消费成交与订单簿流：
+  - 成交：`MarketTradeAeronSubscriber`（`TradeEvent` -> domain `Trade` -> `marketDataService.onTrade(...)`）
+  - 订单簿：`MarketOrderBookAeronSubscriber`（`RawOrderBookSnapshot` -> `OrderBookAggregationService.onOrderBook(...)`）
 
 ## 4. 关键 Stream 约定
 
-默认配置（可在各模块配置文件覆盖）：
-
 按照业务流程，顺序如下：
 
-- 订单入站（gateway -> match-engine）：`streamId=2001`
-- 资金锁定请求（gateway -> account-service）：`lockRequestStreamId=2101`
-- 资金锁定响应（account-service -> gateway）：`lockResponseStreamId=2102`
-- 执行回报（match-engine -> 下游）：`outboundStreamId=2002`
-- 成交明细（match-engine -> 下游）：`tradeStreamId=2003`
+
+| streamId | 发送                | 接收                | 用途     | 传输模型                                  |
+| -------- | ----------------- | ----------------- | ------ | ------------------------------------- |
+| 2101     | `order-gateway`   | `account-service` | 资金锁定请求 | `protocol.model.AccountLockRequest`   |
+| 2102     | `account-service` | `order-gateway`   | 资金锁定响应 | `protocol.model.AccountLockResponse`  |
+| 2001     | `order-gateway`   | `match-engine`    | 订单入站   | `protocol.model.OrderCommand`         |
+| 2002     | `match-engine`    | `null`            | 执行回报   | `protocol.model.ExecutionReport`      |
+| 2003     | `match-engine`    | `account-service` | 成交明细   | `protocol.model.TradeEvent`           |
+| 2003     | `match-engine`    | `market-service`  | 成交明细   | `protocol.model.TradeEvent`           |
+| 2004     | `match-engine`    | `market-service`  | 订单簿快照  | `protocol.model.RawOrderBookSnapshot` |
+
+
+对于 `传输模型` 编解码器整理：
+
+
+| 传输模型                   | streamId | 编码器                                           | 解码器                                           |
+| ---------------------- | -------- | --------------------------------------------- | --------------------------------------------- |
+| `AccountLockRequest`   | 2101     | `AccountLockMessageCodec.encodeRequest(...)`  | `AccountLockMessageCodec.decodeRequest(...)`  |
+| `AccountLockResponse`  | 2102     | `AccountLockMessageCodec.encodeResponse(...)` | `AccountLockMessageCodec.decodeResponse(...)` |
+| `OrderCommand`         | 2001     | `OrderCodec.encode(...)`                    | `OrderCodec.decode(...)`                    |
+| `ExecutionReport`      | 2002     | `ExecutionReportEncoder.encode(...)`          | `-`                                           |
+| `TradeEvent`           | 2003     | `TradeCodec.encode(...)`                    | `TradeCodec.decode(...)`               |
+| `RawOrderBookSnapshot` | 2004     | `OrderBookCodec.encode(...)`                | `OrderBookCodec.decode(...)`           |
+
 
 ## 5. 高性能轮询策略
 
@@ -75,6 +101,7 @@
 3. 将关键参数配置化：fragment limit、idle strategy 参数、超时。
 4. 对 request-response 场景设置合理超时和失败兜底。
 5. 增加指标监控：
+
 - polls/s
 - fragments/s
 - offer success/fail ratio
@@ -83,12 +110,15 @@
 ## 8. 常见问题排查
 
 1. 现象：大量 back pressure
+
 - 检查消费者是否跟得上、stream 分片限制是否过低、日志是否过重。
 
-2. 现象：请求超时
+1. 现象：请求超时
+
 - 检查响应流是否启动、requestId 是否正确关联、poll 线程是否活跃。
 
-3. 现象：CPU 过高
+1. 现象：CPU 过高
+
 - 调整 idle strategy 参数，必要时按环境区分低延迟模式与省 CPU 模式。
 
 ## 9. 相关代码位置
@@ -99,4 +129,9 @@
 - `match-engine/.../messaging/AeronOrderSubscriber.java`
 - `match-engine/.../messaging/AeronExecutionReportPublisher.java`
 - `match-engine/.../messaging/AeronTradePublisher.java`
+- `match-engine/.../messaging/AeronOrderBookPublisher.java`
+- `account-service/.../messaging/AccountTradeAeronProcessor.java`
+- `market-service/.../messaging/MarketTradeAeronSubscriber.java`
+- `market-service/.../messaging/MarketOrderBookAeronSubscriber.java`
 - `common/.../aeron/AeronPollWorker.java`
+

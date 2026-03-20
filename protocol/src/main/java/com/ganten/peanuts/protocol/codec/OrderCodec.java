@@ -2,22 +2,67 @@ package com.ganten.peanuts.protocol.codec;
 
 import java.math.BigDecimal;
 import org.agrona.DirectBuffer;
-import org.springframework.stereotype.Component;
-import com.ganten.peanuts.common.entity.Order;
+import org.agrona.concurrent.UnsafeBuffer;
 import com.ganten.peanuts.common.enums.Contract;
 import com.ganten.peanuts.common.enums.OrderAction;
 import com.ganten.peanuts.common.enums.OrderType;
 import com.ganten.peanuts.common.enums.Side;
 import com.ganten.peanuts.common.enums.Source;
 import com.ganten.peanuts.common.enums.TimeInForce;
+import com.ganten.peanuts.protocol.model.AeronMessage;
+import com.ganten.peanuts.protocol.model.OrderProto;
 
-@Component
-public class OrderDecoder {
+public class OrderCodec extends AbstractCodec<OrderProto> {
 
-    public Order decode(DirectBuffer buffer, int offset) {
+    private static final OrderCodec INSTANCE = new OrderCodec();
+
+    private OrderCodec() {
+        super();
+    }
+
+    public static OrderCodec getInstance() {
+        return INSTANCE;
+    }
+
+    @Override
+    public AeronMessage encode(OrderProto order) {
+        byte[] bytes = new byte[256];
+        UnsafeBuffer buffer = new UnsafeBuffer(bytes);
+
+        int offset = 0;
+        buffer.putLong(offset, order.getOrderId());
+        offset += 8;
+        buffer.putLong(offset, order.getUserId());
+        offset += 8;
+        buffer.putInt(offset, order.getContract().ordinal());
+        offset += 4;
+        buffer.putInt(offset, order.getSide().ordinal());
+        offset += 4;
+        buffer.putInt(offset, order.getOrderType().ordinal());
+        offset += 4;
+        buffer.putInt(offset, order.getTimeInForce().ordinal());
+        offset += 4;
+        offset += buffer.putStringAscii(offset,
+                order.getPrice() == null ? "" : order.getPrice().toPlainString());
+        offset += buffer.putStringAscii(offset,
+                order.getTotalQuantity() == null ? "" : order.getTotalQuantity().toPlainString());
+        buffer.putLong(offset, order.getTimestamp());
+        offset += 8;
+        buffer.putInt(offset, order.getSource() == null ? -1 : order.getSource().ordinal());
+        offset += 4;
+        buffer.putInt(offset, order.getAction() == null ? -1 : order.getAction().ordinal());
+        offset += 4;
+        buffer.putLong(offset, order.getTargetOrderId());
+        offset += 8;
+
+        return new AeronMessage(buffer, offset);
+    }
+
+    @Override
+    public OrderProto decode(DirectBuffer buffer, int offset) {
         int currentOffset = offset;
 
-        Order order = new Order();
+        OrderProto order = new OrderProto();
         order.setOrderId(buffer.getLong(currentOffset));
         currentOffset += 8;
         order.setUserId(buffer.getLong(currentOffset));
@@ -57,3 +102,4 @@ public class OrderDecoder {
         return order;
     }
 }
+

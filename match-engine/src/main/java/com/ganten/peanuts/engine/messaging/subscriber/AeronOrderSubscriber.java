@@ -1,4 +1,4 @@
-package com.ganten.peanuts.engine.messaging;
+package com.ganten.peanuts.engine.messaging.subscriber;
 
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
@@ -14,10 +14,18 @@ import com.ganten.peanuts.common.enums.Contract;
 import com.ganten.peanuts.common.enums.ExecType;
 import com.ganten.peanuts.common.enums.Side;
 import com.ganten.peanuts.engine.config.MatchEngineProperties;
+import com.ganten.peanuts.engine.mapping.ProtocolModelMapper;
+import com.ganten.peanuts.engine.messaging.publisher.AeronExecutionReportPublisher;
+import com.ganten.peanuts.engine.messaging.publisher.AeronOrderBookPublisher;
+import com.ganten.peanuts.engine.messaging.publisher.AeronTradePublisher;
 import com.ganten.peanuts.engine.model.OrderBook;
 import com.ganten.peanuts.engine.service.MatchService;
-import com.ganten.peanuts.protocol.codec.OrderDecoder;
-import com.ganten.peanuts.protocol.model.ExecutionReport;
+import com.ganten.peanuts.protocol.codec.OrderCodec;
+import com.ganten.peanuts.protocol.model.ExecutionReportProto;
+import com.ganten.peanuts.protocol.model.OrderBookSnapshotProto;
+import com.ganten.peanuts.protocol.model.OrderProto;
+import com.ganten.peanuts.protocol.model.TradeProto;
+
 import io.aeron.Subscription;
 import io.aeron.logbuffer.FragmentHandler;
 
@@ -30,22 +38,22 @@ public class AeronOrderSubscriber {
     private final AeronExecutionReportPublisher publisher;
     private final AeronTradePublisher tradePublisher;
     private final AeronOrderBookPublisher orderBookPublisher;
-    private final OrderDecoder orderDecoder;
     private final MatchService matchService;
+    private final ProtocolModelMapper protocolModelMapper;
 
     private Subscription subscription;
     private final AtomicLong tradeIdGenerator = new AtomicLong(System.currentTimeMillis() * 1_000L);
     private AeronPollWorker pollWorker;
 
     public AeronOrderSubscriber(MatchEngineProperties properties, AeronExecutionReportPublisher publisher,
-            AeronTradePublisher tradePublisher, AeronOrderBookPublisher orderBookPublisher, OrderDecoder orderDecoder,
-            MatchService matchService) {
+            AeronTradePublisher tradePublisher, AeronOrderBookPublisher orderBookPublisher,
+            MatchService matchService, ProtocolModelMapper protocolModelMapper) {
         this.properties = properties;
         this.publisher = publisher;
         this.tradePublisher = tradePublisher;
         this.orderBookPublisher = orderBookPublisher;
-        this.orderDecoder = orderDecoder;
         this.matchService = matchService;
+        this.protocolModelMapper = protocolModelMapper;
     }
 
     @PostConstruct
@@ -65,10 +73,11 @@ public class AeronOrderSubscriber {
 
     private void startPollLoop() {
         final FragmentHandler orderHandler = (buffer, offset, length, header) -> {
-            Order order = orderDecoder.decode(buffer, offset);
+            OrderProto command = OrderCodec.getInstance().decode(buffer, offset);
+            Order order = protocolModelMapper.toDomainOrder(command);
             log.info("Order received, orderId={}, userId={}", order.getOrderId(), order.getUserId());
-            List<ExecutionReport> reports = matchService.match(order);
-            for (ExecutionReport report : reports) {
+            List<ExecutionReportProto> reports = matchService.match(order);
+            for (ExecutionReportProto report : reports) {
                 publisher.publish(report);
             }
             publishTrades(reports);
@@ -91,13 +100,13 @@ public class AeronOrderSubscriber {
         }
     }
 
-    private void publishTrades(List<ExecutionReport> reports) {
+    private void publishTrades(List<ExecutionReportProto> reports) {
         for (int i = 0; i < reports.size() - 1; i++) {
-            ExecutionReport first = reports.get(i);
-            ExecutionReport second = reports.get(i + 1);
+            ExecutionReportProto first = reports.get(i);
+            ExecutionReportProto second = reports.get(i + 1);
 
-            ExecutionReport buyReport;
-            ExecutionReport sellReport;
+            ExecutionReportProto buyReport;
+            ExecutionReportProto sellReport;
             if (first.getSide() == Side.BUY && second.getSide() == Side.SELL) {
                 buyReport = first;
                 sellReport = second;
@@ -129,7 +138,8 @@ public class AeronOrderSubscriber {
             trade.setPrice(buyReport.getMatchedPrice());
             trade.setQuantity(buyReport.getMatchedQuantity());
             trade.setTimestamp(Math.max(buyReport.getTimestamp(), sellReport.getTimestamp()));
-            tradePublisher.publish(trade);
+            TradeProto event = protocolModelMapper.toTradeEvent(trade);
+            tradePublisher.publish(event);
             i++;
         }
     }
@@ -142,7 +152,8 @@ public class AeronOrderSubscriber {
     private void publishOrderBook(Contract contract) {
         try {
             OrderBook orderBook = matchService.getOrderBook(contract);
-            orderBookPublisher.publish(contract, orderBook);
+            OrderBookSnapshotProto snapshot = protocolModelMapper.toRawOrderBookSnapshot(contract, orderBook);
+            orderBookPublisher.publish(snapshot);
             log.debug("Order book published for contract={}", contract);
         } catch (Exception e) {
             log.warn("Failed to publish order book for contract={}: {}", contract, e.getMessage());

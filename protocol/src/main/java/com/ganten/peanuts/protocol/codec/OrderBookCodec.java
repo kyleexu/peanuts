@@ -4,17 +4,48 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import org.agrona.DirectBuffer;
-import org.springframework.stereotype.Component;
-import com.ganten.peanuts.common.entity.OrderSnapshot;
+import org.agrona.concurrent.UnsafeBuffer;
 import com.ganten.peanuts.common.enums.Contract;
-import com.ganten.peanuts.protocol.model.RawOrderBookSnapshot;
+import com.ganten.peanuts.protocol.model.AeronMessage;
+import com.ganten.peanuts.protocol.model.OrderBookSnapshotProto;
+import com.ganten.peanuts.protocol.model.OrderBookSnapshotProto.OrderLevel;
 
-@Component
-public class OrderBookMessageCodec {
+public class OrderBookCodec extends AbstractCodec<OrderBookSnapshotProto> {
 
-    public RawOrderBookSnapshot decode(DirectBuffer buffer, int offset) {
+    private static final OrderBookCodec INSTANCE = new OrderBookCodec();
+
+    private static final int MAX_ORDERS_PER_SIDE = 50;
+
+    private OrderBookCodec() {
+        super();
+    }
+
+    public static OrderBookCodec getInstance() {
+        return INSTANCE;
+    }
+
+    @Override
+    public AeronMessage encode(OrderBookSnapshotProto snapshot) {
+        byte[] bytes = new byte[4096];
+        UnsafeBuffer buffer = new UnsafeBuffer(bytes);
+        int offset = 0;
+
+        buffer.putInt(offset, snapshot.getContract().ordinal());
+        offset += 4;
+
+        buffer.putLong(offset, snapshot.getTimestamp());
+        offset += 8;
+
+        offset = encodeSide(buffer, offset, snapshot.getBidOrders());
+        offset = encodeSide(buffer, offset, snapshot.getAskOrders());
+
+        return new AeronMessage(buffer, offset);
+    }
+
+    @Override
+    public OrderBookSnapshotProto decode(DirectBuffer buffer, int offset) {
         int currentOffset = offset;
-        RawOrderBookSnapshot snapshot = new RawOrderBookSnapshot();
+        OrderBookSnapshotProto snapshot = new OrderBookSnapshotProto();
 
         int contractOrdinal = buffer.getInt(currentOffset);
         currentOffset += 4;
@@ -26,7 +57,7 @@ public class OrderBookMessageCodec {
         int buyCount = buffer.getInt(currentOffset);
         currentOffset += 4;
 
-        List<OrderSnapshot> bidOrders = new ArrayList<OrderSnapshot>(buyCount);
+        List<OrderLevel> bidOrders = new ArrayList<OrderLevel>(buyCount);
         for (int i = 0; i < buyCount; i++) {
             DecodeResult result = decodeOrder(buffer, currentOffset);
             currentOffset = result.nextOffset;
@@ -38,7 +69,7 @@ public class OrderBookMessageCodec {
         int sellCount = buffer.getInt(currentOffset);
         currentOffset += 4;
 
-        List<OrderSnapshot> askOrders = new ArrayList<OrderSnapshot>(sellCount);
+        List<OrderLevel> askOrders = new ArrayList<OrderLevel>(sellCount);
         for (int i = 0; i < sellCount; i++) {
             DecodeResult result = decodeOrder(buffer, currentOffset);
             currentOffset = result.nextOffset;
@@ -52,7 +83,35 @@ public class OrderBookMessageCodec {
         return snapshot;
     }
 
-    private DecodeResult decodeOrder(DirectBuffer buffer, int offset) {
+    private int encodeSide(UnsafeBuffer buffer, int offset, List<OrderLevel> orders) {
+        int count = 0;
+        int countOffset = offset;
+        offset += 4;
+
+        for (OrderLevel order : orders) {
+            if (count >= MAX_ORDERS_PER_SIDE) {
+                break;
+            }
+
+            buffer.putLong(offset, order.getOrderId());
+            offset += 8;
+            buffer.putLong(offset, order.getUserId());
+            offset += 8;
+            offset += buffer.putStringAscii(offset, order.getPrice() == null ? "" : order.getPrice().toPlainString());
+            offset += buffer.putStringAscii(offset,
+                    order.getTotalQuantity() == null ? "" : order.getTotalQuantity().toPlainString());
+            offset += buffer.putStringAscii(offset,
+                    order.getFilledQuantity() == null ? "" : order.getFilledQuantity().toPlainString());
+            buffer.putLong(offset, order.getTimestamp());
+            offset += 8;
+            count++;
+        }
+
+        buffer.putInt(countOffset, count);
+        return offset;
+    }
+
+    private static DecodeResult decodeOrder(DirectBuffer buffer, int offset) {
         int currentOffset = offset;
 
         long orderId = buffer.getLong(currentOffset);
@@ -85,7 +144,7 @@ public class OrderBookMessageCodec {
             return new DecodeResult(null, currentOffset);
         }
 
-        OrderSnapshot order = new OrderSnapshot();
+        OrderLevel order = new OrderLevel();
         order.setOrderId(orderId);
         order.setUserId(userId);
         order.setPrice(price);
@@ -97,12 +156,13 @@ public class OrderBookMessageCodec {
     }
 
     private static final class DecodeResult {
-        private final OrderSnapshot order;
+        private final OrderLevel order;
         private final int nextOffset;
 
-        private DecodeResult(OrderSnapshot order, int nextOffset) {
+        private DecodeResult(OrderLevel order, int nextOffset) {
             this.order = order;
             this.nextOffset = nextOffset;
         }
     }
 }
+

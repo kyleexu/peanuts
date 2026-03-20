@@ -1,4 +1,4 @@
-package com.ganten.peanuts.market.messaging;
+package com.ganten.peanuts.market.messaging.subscriber;
 
 import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
@@ -6,8 +6,9 @@ import org.springframework.stereotype.Component;
 import com.ganten.peanuts.common.aeron.AeronPollWorker;
 import com.ganten.peanuts.market.config.MarketAeronProperties;
 import com.ganten.peanuts.market.service.OrderBookAggregationService;
-import com.ganten.peanuts.protocol.codec.OrderBookMessageCodec;
-import com.ganten.peanuts.protocol.model.RawOrderBookSnapshot;
+import com.ganten.peanuts.protocol.codec.OrderBookCodec;
+import com.ganten.peanuts.protocol.model.OrderBookSnapshotProto;
+
 import io.aeron.Aeron;
 import io.aeron.Subscription;
 import io.aeron.logbuffer.FragmentHandler;
@@ -18,17 +19,15 @@ import lombok.extern.slf4j.Slf4j;
 public class MarketOrderBookAeronSubscriber {
 
     private final MarketAeronProperties properties;
-    private final OrderBookMessageCodec orderBookMessageCodec;
     private final OrderBookAggregationService orderBookAggregationService;
 
     private Aeron aeron;
     private Subscription subscription;
     private AeronPollWorker pollWorker;
 
-    public MarketOrderBookAeronSubscriber(MarketAeronProperties properties, OrderBookMessageCodec orderBookMessageCodec,
+    public MarketOrderBookAeronSubscriber(MarketAeronProperties properties,
             OrderBookAggregationService orderBookAggregationService) {
         this.properties = properties;
-        this.orderBookMessageCodec = orderBookMessageCodec;
         this.orderBookAggregationService = orderBookAggregationService;
     }
 
@@ -46,7 +45,7 @@ public class MarketOrderBookAeronSubscriber {
 
     private void startPollLoop() {
         final FragmentHandler orderBookHandler = (buffer, offset, length, header) -> {
-            RawOrderBookSnapshot snapshot = orderBookMessageCodec.decode(buffer, offset);
+            OrderBookSnapshotProto snapshot = OrderBookCodec.getInstance().decode(buffer, offset);
             orderBookAggregationService.onOrderBook(snapshot);
         };
         pollWorker = AeronPollWorker.start("market-orderbook-aeron-poller",

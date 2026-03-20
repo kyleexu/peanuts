@@ -3,7 +3,7 @@ package com.ganten.peanuts.protocol.model;
 import java.math.BigDecimal;
 import com.ganten.peanuts.common.enums.Currency;
 
-public class AccountLockRequest {
+public class LockRequestProto {
 
     private long requestId;
     private long userId;

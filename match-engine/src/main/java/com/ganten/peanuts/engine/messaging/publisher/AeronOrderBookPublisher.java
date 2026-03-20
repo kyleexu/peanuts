@@ -1,15 +1,15 @@
-package com.ganten.peanuts.engine.messaging;
+package com.ganten.peanuts.engine.messaging.publisher;
 
 import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
-import com.ganten.peanuts.common.enums.Contract;
 import com.ganten.peanuts.engine.config.MatchEngineProperties;
-import com.ganten.peanuts.engine.model.OrderBook;
-import com.ganten.peanuts.protocol.codec.OrderBookEncoder;
-import com.ganten.peanuts.protocol.model.EncodedMessage;
+import com.ganten.peanuts.protocol.codec.OrderBookCodec;
+import com.ganten.peanuts.protocol.model.AeronMessage;
+import com.ganten.peanuts.protocol.model.OrderBookSnapshotProto;
+
 import io.aeron.Aeron;
 import io.aeron.Publication;
 
@@ -22,14 +22,12 @@ public class AeronOrderBookPublisher {
     private static final Logger log = LoggerFactory.getLogger(AeronOrderBookPublisher.class);
 
     private final MatchEngineProperties properties;
-    private final OrderBookEncoder encoder;
 
     private Aeron aeron;
     private Publication publication;
 
-    public AeronOrderBookPublisher(MatchEngineProperties properties, OrderBookEncoder encoder) {
+    public AeronOrderBookPublisher(MatchEngineProperties properties) {
         this.properties = properties;
-        this.encoder = encoder;
     }
 
     @PostConstruct
@@ -51,24 +49,23 @@ public class AeronOrderBookPublisher {
     /**
      * 发布订单簿快照
      *
-     * @param contract 合约
-     * @param orderBook 订单簿
+     * @param snapshot 订单簿快照
      */
-    public void publish(Contract contract, OrderBook orderBook) {
+    public void publish(OrderBookSnapshotProto snapshot) {
         if (publication == null) {
-            log.error("Order book publication not available, contract={}", contract);
+            log.error("Order book publication not available, contract={}", snapshot.getContract());
             return;
         }
 
         try {
-            EncodedMessage msg = encoder.encode(contract, orderBook.getBuyOrders(), orderBook.getSellOrders());
+            AeronMessage msg = OrderBookCodec.getInstance().encode(snapshot);
             long result = publication.offer(msg.getBuffer(), 0, msg.getLength());
 
             if (result < 0) {
-                log.warn("Failed to publish order book, contract={}, result={}", contract, result);
+                log.warn("Failed to publish order book, contract={}, result={}", snapshot.getContract(), result);
             }
         } catch (Exception e) {
-            log.error("Error publishing order book, contract={}", contract, e);
+            log.error("Error publishing order book, contract={}", snapshot.getContract(), e);
         }
     }
 

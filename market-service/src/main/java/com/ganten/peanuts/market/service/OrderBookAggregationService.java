@@ -6,21 +6,21 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.stereotype.Service;
 import com.ganten.peanuts.common.constant.Constants;
-import com.ganten.peanuts.common.entity.OrderSnapshot;
 import com.ganten.peanuts.common.entity.PriceQuantity;
 import com.ganten.peanuts.common.enums.Contract;
 import com.ganten.peanuts.market.model.MarketMessage;
 import com.ganten.peanuts.market.model.OrderBookSnapshot;
 import com.ganten.peanuts.market.websocket.WebSocketBroadcaster;
-import com.ganten.peanuts.protocol.model.RawOrderBookSnapshot;
+import com.ganten.peanuts.protocol.model.OrderBookSnapshotProto;
+import com.ganten.peanuts.protocol.model.OrderBookSnapshotProto.OrderLevel;
 
 @Service
 public class OrderBookAggregationService {
 
     private static final int DEFAULT_LEVEL = 1;
 
-    private final Map<Contract, RawOrderBookSnapshot> rawSnapshots =
-            new ConcurrentHashMap<Contract, RawOrderBookSnapshot>();
+    private final Map<Contract, OrderBookSnapshotProto> rawSnapshots =
+            new ConcurrentHashMap<Contract, OrderBookSnapshotProto>();
     private final Map<String, OrderBookSnapshot> snapshotsByLevel = new ConcurrentHashMap<String, OrderBookSnapshot>();
     private final WebSocketBroadcaster webSocketBroadcaster;
 
@@ -31,7 +31,7 @@ public class OrderBookAggregationService {
     /**
      * 消息处理入口
      */
-    public void onOrderBook(RawOrderBookSnapshot snapshot) {
+    public void onOrderBook(OrderBookSnapshotProto snapshot) {
         if (snapshot == null || snapshot.getContract() == null) {
             return;
         }
@@ -61,7 +61,7 @@ public class OrderBookAggregationService {
         if (cached != null) {
             return cached;
         }
-        RawOrderBookSnapshot raw = rawSnapshots.get(contract);
+        OrderBookSnapshotProto raw = rawSnapshots.get(contract);
         if (raw == null) {
             return null;
         }
@@ -70,12 +70,12 @@ public class OrderBookAggregationService {
         return aggregated;
     }
 
-    private OrderBookSnapshot aggregateByLevel(RawOrderBookSnapshot raw, int levelMultiplier) {
+    private OrderBookSnapshot aggregateByLevel(OrderBookSnapshotProto raw, int levelMultiplier) {
         BigDecimal tickSize = BigDecimal.valueOf(raw.getContract().getTickSize());
         BigDecimal levelStep = tickSize.multiply(new BigDecimal(levelMultiplier));
 
         Map<BigDecimal, BigDecimal> bidLevels = new TreeMap<BigDecimal, BigDecimal>(Collections.reverseOrder());
-        for (OrderSnapshot order : raw.getBidOrders()) {
+        for (OrderLevel order : raw.getBidOrders()) {
             if (order.getPrice() == null || order.getRemainingQuantity() == null
                     || order.getRemainingQuantity().signum() <= 0) {
                 continue;
@@ -85,7 +85,7 @@ public class OrderBookAggregationService {
         }
 
         Map<BigDecimal, BigDecimal> askLevels = new TreeMap<BigDecimal, BigDecimal>();
-        for (OrderSnapshot order : raw.getAskOrders()) {
+        for (OrderLevel order : raw.getAskOrders()) {
             if (order.getPrice() == null || order.getRemainingQuantity() == null
                     || order.getRemainingQuantity().signum() <= 0) {
                 continue;

@@ -7,7 +7,7 @@ import com.ganten.peanuts.common.entity.Order;
 import com.ganten.peanuts.common.enums.*;
 import com.ganten.peanuts.engine.model.OrderBook;
 import com.ganten.peanuts.engine.utils.ExecutionReportBuilder;
-import com.ganten.peanuts.protocol.model.ExecutionReport;
+import com.ganten.peanuts.protocol.model.ExecutionReportProto;
 
 @Service
 public class MatchService {
@@ -24,7 +24,7 @@ public class MatchService {
         return orderBook(contract);
     }
 
-    public synchronized List<ExecutionReport> match(Order order) {
+    public synchronized List<ExecutionReportProto> match(Order order) {
         normalize(order);
 
         if (order.getAction() == OrderAction.CANCEL) {
@@ -45,8 +45,8 @@ public class MatchService {
         return newOrder(order);
     }
 
-    private List<ExecutionReport> newOrder(Order incomingOrder) {
-        List<ExecutionReport> reports = new ArrayList<ExecutionReport>();
+    private List<ExecutionReportProto> newOrder(Order incomingOrder) {
+        List<ExecutionReportProto> reports = new ArrayList<ExecutionReportProto>();
         OrderBook book = this.orderBook(incomingOrder.getContract());
         PriorityQueue<Order> oppositeQueue =
                 incomingOrder.getSide() == Side.BUY ? book.getSellOrders() : book.getBuyOrders();
@@ -88,8 +88,8 @@ public class MatchService {
         return reports;
     }
 
-    private List<ExecutionReport> cancel(Order cancelOrder) {
-        List<ExecutionReport> reports = new ArrayList<ExecutionReport>();
+    private List<ExecutionReportProto> cancel(Order cancelOrder) {
+        List<ExecutionReportProto> reports = new ArrayList<ExecutionReportProto>();
         long targetOrderId = resolveTargetOrderId(cancelOrder);
         Order existingOrder = cancelExisting(cancelOrder.getContract(), targetOrderId);
         if (existingOrder != null) {

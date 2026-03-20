@@ -1,4 +1,4 @@
-package com.ganten.peanuts.engine.messaging;
+package com.ganten.peanuts.engine.messaging.publisher;
 
 import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
@@ -6,9 +6,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import com.ganten.peanuts.engine.config.MatchEngineProperties;
-import com.ganten.peanuts.protocol.codec.ExecutionReportEncoder;
-import com.ganten.peanuts.protocol.model.EncodedMessage;
-import com.ganten.peanuts.protocol.model.ExecutionReport;
+import com.ganten.peanuts.protocol.codec.ExecutionReportCodec;
+import com.ganten.peanuts.protocol.model.AeronMessage;
+import com.ganten.peanuts.protocol.model.ExecutionReportProto;
 import io.aeron.Aeron;
 import io.aeron.Publication;
 import io.aeron.driver.MediaDriver;
@@ -19,15 +19,13 @@ public class AeronExecutionReportPublisher {
     private static final Logger log = LoggerFactory.getLogger(AeronExecutionReportPublisher.class);
 
     private final MatchEngineProperties properties;
-    private final ExecutionReportEncoder encoder;
 
     private MediaDriver mediaDriver;
     private Aeron aeron;
     private Publication publication;
 
-    public AeronExecutionReportPublisher(MatchEngineProperties properties, ExecutionReportEncoder encoder) {
+    public AeronExecutionReportPublisher(MatchEngineProperties properties) {
         this.properties = properties;
-        this.encoder = encoder;
     }
 
     @PostConstruct
@@ -52,13 +50,13 @@ public class AeronExecutionReportPublisher {
                 properties.getChannel(), properties.getOutboundStreamId());
     }
 
-    public void publish(ExecutionReport report) {
+    public void publish(ExecutionReportProto report) {
         if (publication == null) {
             log.error("Execution report publication not available, orderId={}", report.getOrderId());
             return;
         }
 
-        EncodedMessage encodedMessage = encoder.encode(report);
+        AeronMessage encodedMessage = ExecutionReportCodec.getInstance().encode(report);
         long result = publication.offer(encodedMessage.getBuffer(), 0, encodedMessage.getLength());
         if (result > 0) {
             log.info("Execution report published, orderId={}, result={}", report.getOrderId(), result);

@@ -14,10 +14,11 @@ import com.ganten.peanuts.common.entity.Order;
 import com.ganten.peanuts.common.enums.Currency;
 import com.ganten.peanuts.common.enums.Side;
 import com.ganten.peanuts.gateway.config.AeronProperties;
-import com.ganten.peanuts.protocol.codec.AccountLockMessageCodec;
-import com.ganten.peanuts.protocol.model.AccountLockRequest;
-import com.ganten.peanuts.protocol.model.AccountLockResponse;
-import com.ganten.peanuts.protocol.model.EncodedMessage;
+import com.ganten.peanuts.protocol.codec.LockRequestCodec;
+import com.ganten.peanuts.protocol.codec.LockResponseCodec;
+import com.ganten.peanuts.protocol.model.LockRequestProto;
+import com.ganten.peanuts.protocol.model.LockResponseProto;
+import com.ganten.peanuts.protocol.model.AeronMessage;
 import io.aeron.Aeron;
 import io.aeron.Publication;
 import io.aeron.Subscription;
@@ -29,19 +30,17 @@ import lombok.extern.slf4j.Slf4j;
 public class AccountLockAeronClient {
 
     private final AeronProperties properties;
-    private final AccountLockMessageCodec codec;
     private final AtomicLong requestIdGenerator = new AtomicLong(1L);
-    private final Map<Long, CompletableFuture<AccountLockResponse>> pending =
-            new ConcurrentHashMap<Long, CompletableFuture<AccountLockResponse>>();
+    private final Map<Long, CompletableFuture<LockResponseProto>> pending =
+            new ConcurrentHashMap<Long, CompletableFuture<LockResponseProto>>();
 
     private Aeron aeron;
     private Publication requestPublication;
     private Subscription responseSubscription;
     private AeronPollWorker responsePollWorker;
 
-    public AccountLockAeronClient(AeronProperties properties, AccountLockMessageCodec codec) {
+    public AccountLockAeronClient(AeronProperties properties) {
         this.properties = properties;
-        this.codec = codec;
     }
 
     @PostConstruct
@@ -53,12 +52,12 @@ public class AccountLockAeronClient {
         startResponsePollLoop();
     }
 
-    public AccountLockResponse checkAndLock(Order order) {
-        AccountLockRequest request = buildRequest(order);
-        CompletableFuture<AccountLockResponse> future = new CompletableFuture<AccountLockResponse>();
+    public LockResponseProto checkAndLock(Order order) {
+        LockRequestProto request = buildRequest(order);
+        CompletableFuture<LockResponseProto> future = new CompletableFuture<LockResponseProto>();
         pending.put(Long.valueOf(request.getRequestId()), future);
         try {
-            EncodedMessage encoded = codec.encodeRequest(request);
+            AeronMessage encoded = LockRequestCodec.getInstance().encode(request);
             long result = requestPublication.offer(encoded.getBuffer(), 0, encoded.getLength());
             if (result <= 0) {
                 pending.remove(Long.valueOf(request.getRequestId()));
@@ -73,8 +72,8 @@ public class AccountLockAeronClient {
 
     private void startResponsePollLoop() {
         final FragmentHandler responseHandler = (buffer, offset, length, header) -> {
-            AccountLockResponse response = codec.decodeResponse(buffer, offset);
-            CompletableFuture<AccountLockResponse> future = pending.remove(Long.valueOf(response.getRequestId()));
+            LockResponseProto response = LockResponseCodec.getInstance().decode(buffer, offset);
+            CompletableFuture<LockResponseProto> future = pending.remove(Long.valueOf(response.getRequestId()));
             if (future != null) {
                 future.complete(response);
             }
@@ -84,7 +83,7 @@ public class AccountLockAeronClient {
                 ex -> log.error("Account lock response poll loop failed", ex));
     }
 
-    private AccountLockRequest buildRequest(Order order) {
+    private LockRequestProto buildRequest(Order order) {
         Currency currency;
         BigDecimal amount;
         if (order.getSide() == Side.BUY) {
@@ -98,7 +97,7 @@ public class AccountLockAeronClient {
             amount = order.getTotalQuantity();
         }
 
-        AccountLockRequest request = new AccountLockRequest();
+        LockRequestProto request = new LockRequestProto();
         request.setRequestId(requestIdGenerator.getAndIncrement());
         request.setUserId(order.getUserId());
         request.setCurrency(currency);
@@ -107,8 +106,8 @@ public class AccountLockAeronClient {
         return request;
     }
 
-    private AccountLockResponse fail(long requestId, String message) {
-        AccountLockResponse response = new AccountLockResponse();
+    private LockResponseProto fail(long requestId, String message) {
+        LockResponseProto response = new LockResponseProto();
         response.setRequestId(requestId);
         response.setSuccess(false);
         response.setMessage(message);

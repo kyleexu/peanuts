@@ -6,10 +6,11 @@ import org.springframework.stereotype.Component;
 import com.ganten.peanuts.account.config.AccountAeronProperties;
 import com.ganten.peanuts.account.service.AccountService;
 import com.ganten.peanuts.common.aeron.AeronPollWorker;
-import com.ganten.peanuts.protocol.codec.AccountLockMessageCodec;
-import com.ganten.peanuts.protocol.model.AccountLockRequest;
-import com.ganten.peanuts.protocol.model.AccountLockResponse;
-import com.ganten.peanuts.protocol.model.EncodedMessage;
+import com.ganten.peanuts.protocol.codec.LockRequestCodec;
+import com.ganten.peanuts.protocol.codec.LockResponseCodec;
+import com.ganten.peanuts.protocol.model.LockRequestProto;
+import com.ganten.peanuts.protocol.model.LockResponseProto;
+import com.ganten.peanuts.protocol.model.AeronMessage;
 import io.aeron.Aeron;
 import io.aeron.Publication;
 import io.aeron.Subscription;
@@ -22,18 +23,15 @@ public class AccountLockAeronProcessor {
 
     private final AccountAeronProperties properties;
     private final AccountService accountService;
-    private final AccountLockMessageCodec codec;
 
     private Aeron aeron;
     private Subscription requestSubscription;
     private Publication responsePublication;
     private AeronPollWorker pollWorker;
 
-    public AccountLockAeronProcessor(AccountAeronProperties properties, AccountService accountService,
-            AccountLockMessageCodec codec) {
+    public AccountLockAeronProcessor(AccountAeronProperties properties, AccountService accountService) {
         this.properties = properties;
         this.accountService = accountService;
-        this.codec = codec;
     }
 
     @PostConstruct
@@ -51,10 +49,10 @@ public class AccountLockAeronProcessor {
 
     private void startPollLoop() {
         final FragmentHandler requestHandler = (buffer, offset, length, header) -> {
-            AccountLockRequest request = codec.decodeRequest(buffer, offset);
+            LockRequestProto request = LockRequestCodec.getInstance().decode(buffer, offset);
             boolean success = accountService.tryLock(request.getUserId(), request.getCurrency(), request.getAmount());
 
-            AccountLockResponse response = new AccountLockResponse();
+            LockResponseProto response = new LockResponseProto();
             response.setRequestId(request.getRequestId());
             response.setSuccess(success);
             if (success) {
@@ -63,7 +61,7 @@ public class AccountLockAeronProcessor {
                 response.setMessage("insufficient available balance");
             }
 
-            EncodedMessage encoded = codec.encodeResponse(response);
+            AeronMessage encoded = LockResponseCodec.getInstance().encode(response);
             long result = responsePublication.offer(encoded.getBuffer(), 0, encoded.getLength());
             if (result <= 0) {
                 log.warn("Account lock response back pressured, requestId={}, code={}", request.getRequestId(), result);

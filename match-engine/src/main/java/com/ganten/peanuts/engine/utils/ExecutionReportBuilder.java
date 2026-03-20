@@ -3,19 +3,19 @@ package com.ganten.peanuts.engine.utils;
 import java.math.BigDecimal;
 import com.ganten.peanuts.common.entity.Order;
 import com.ganten.peanuts.common.enums.ExecType;
-import com.ganten.peanuts.protocol.model.ExecutionReport;
+import com.ganten.peanuts.protocol.model.ExecutionReportProto;
 
 public class ExecutionReportBuilder {
-    public static ExecutionReport buildTradeReport(Order order, long counterpartyOrderId, BigDecimal matchedPrice,
+    public static ExecutionReportProto buildTradeReport(Order order, long counterpartyOrderId, BigDecimal matchedPrice,
             BigDecimal matchedQuantity) {
-        ExecutionReport report = buildReport(order, ExecType.TRADE, matchedPrice, matchedQuantity);
+        ExecutionReportProto report = buildReport(order, ExecType.TRADE, matchedPrice, matchedQuantity);
         report.setCounterpartyOrderId(counterpartyOrderId);
         return report;
     }
 
-    public static ExecutionReport buildReport(Order order, ExecType execType, BigDecimal matchedPrice,
+    public static ExecutionReportProto buildReport(Order order, ExecType execType, BigDecimal matchedPrice,
             BigDecimal matchedQuantity) {
-        ExecutionReport report = new ExecutionReport();
+        ExecutionReportProto report = new ExecutionReportProto();
         report.setOrderId(order.getOrderId());
         report.setUserId(order.getUserId());
         report.setContract(order.getContract());

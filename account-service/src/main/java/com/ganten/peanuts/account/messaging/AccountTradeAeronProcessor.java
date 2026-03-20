@@ -4,10 +4,12 @@ import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
 import org.springframework.stereotype.Component;
 import com.ganten.peanuts.account.config.AccountAeronProperties;
+import com.ganten.peanuts.account.mapping.TradeProtocolMapper;
 import com.ganten.peanuts.account.service.AccountService;
 import com.ganten.peanuts.common.aeron.AeronPollWorker;
 import com.ganten.peanuts.common.entity.Trade;
-import com.ganten.peanuts.protocol.codec.TradeMessageCodec;
+import com.ganten.peanuts.protocol.codec.TradeCodec;
+import com.ganten.peanuts.protocol.model.TradeProto;
 import io.aeron.Aeron;
 import io.aeron.Subscription;
 import io.aeron.logbuffer.FragmentHandler;
@@ -19,17 +21,17 @@ public class AccountTradeAeronProcessor {
 
     private final AccountAeronProperties properties;
     private final AccountService accountService;
-    private final TradeMessageCodec tradeMessageCodec;
+    private final TradeProtocolMapper tradeProtocolMapper;
 
     private Aeron aeron;
     private Subscription tradeSubscription;
     private AeronPollWorker pollWorker;
 
     public AccountTradeAeronProcessor(AccountAeronProperties properties, AccountService accountService,
-            TradeMessageCodec tradeMessageCodec) {
+            TradeProtocolMapper tradeProtocolMapper) {
         this.properties = properties;
         this.accountService = accountService;
-        this.tradeMessageCodec = tradeMessageCodec;
+        this.tradeProtocolMapper = tradeProtocolMapper;
     }
 
     @PostConstruct
@@ -46,7 +48,8 @@ public class AccountTradeAeronProcessor {
 
     private void startPollLoop() {
         final FragmentHandler tradeHandler = (buffer, offset, length, header) -> {
-            Trade trade = tradeMessageCodec.decode(buffer, offset);
+            TradeProto event = TradeCodec.getInstance().decode(buffer, offset);
+            Trade trade = tradeProtocolMapper.toDomain(event);
             boolean settled = accountService.applyTrade(trade);
             if (!settled) {
                 log.warn("Trade settlement skipped due to insufficient locked balance, tradeId={}", trade.getTradeId());

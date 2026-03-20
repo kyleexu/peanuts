@@ -1,6 +1,6 @@
 package com.ganten.peanuts.protocol.model;
 
-public class AccountLockResponse {
+public class LockResponseProto {
 
     private long requestId;
     private boolean success;

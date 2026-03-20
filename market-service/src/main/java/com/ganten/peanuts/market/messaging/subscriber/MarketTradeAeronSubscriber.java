@@ -1,4 +1,4 @@
-package com.ganten.peanuts.market.messaging;
+package com.ganten.peanuts.market.messaging.subscriber;
 
 import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
@@ -6,8 +6,10 @@ import org.springframework.stereotype.Component;
 import com.ganten.peanuts.common.aeron.AeronPollWorker;
 import com.ganten.peanuts.common.entity.Trade;
 import com.ganten.peanuts.market.config.MarketAeronProperties;
+import com.ganten.peanuts.market.mapping.TradeProtocolMapper;
 import com.ganten.peanuts.market.service.MarketDataService;
-import com.ganten.peanuts.protocol.codec.TradeMessageCodec;
+import com.ganten.peanuts.protocol.codec.TradeCodec;
+import com.ganten.peanuts.protocol.model.TradeProto;
 import io.aeron.Aeron;
 import io.aeron.Subscription;
 import io.aeron.logbuffer.FragmentHandler;
@@ -18,18 +20,18 @@ import lombok.extern.slf4j.Slf4j;
 public class MarketTradeAeronSubscriber {
 
     private final MarketAeronProperties properties;
-    private final TradeMessageCodec tradeMessageCodec;
     private final MarketDataService marketDataService;
+    private final TradeProtocolMapper tradeProtocolMapper;
 
     private Aeron aeron;
     private Subscription subscription;
     private AeronPollWorker pollWorker;
 
-    public MarketTradeAeronSubscriber(MarketAeronProperties properties, TradeMessageCodec tradeMessageCodec,
-            MarketDataService marketDataService) {
+    public MarketTradeAeronSubscriber(MarketAeronProperties properties,
+            MarketDataService marketDataService, TradeProtocolMapper tradeProtocolMapper) {
         this.properties = properties;
-        this.tradeMessageCodec = tradeMessageCodec;
         this.marketDataService = marketDataService;
+        this.tradeProtocolMapper = tradeProtocolMapper;
     }
 
     @PostConstruct
@@ -46,7 +48,8 @@ public class MarketTradeAeronSubscriber {
 
     private void startPollLoop() {
         final FragmentHandler tradeHandler = (buffer, offset, length, header) -> {
-            Trade trade = tradeMessageCodec.decode(buffer, offset);
+            TradeProto event = TradeCodec.getInstance().decode(buffer, offset);
+            Trade trade = tradeProtocolMapper.toDomain(event);
             marketDataService.onTrade(trade);
         };
         pollWorker = AeronPollWorker.start("market-trade-aeron-poller",

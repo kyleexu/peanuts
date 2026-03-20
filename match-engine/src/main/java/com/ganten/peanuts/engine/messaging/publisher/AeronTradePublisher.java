@@ -1,32 +1,27 @@
-package com.ganten.peanuts.engine.messaging;
+package com.ganten.peanuts.engine.messaging.publisher;
 
 import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
-import com.ganten.peanuts.common.entity.Trade;
 import com.ganten.peanuts.engine.config.MatchEngineProperties;
-import com.ganten.peanuts.protocol.codec.TradeEncoder;
-import com.ganten.peanuts.protocol.model.EncodedMessage;
+import com.ganten.peanuts.protocol.codec.TradeCodec;
+import com.ganten.peanuts.protocol.model.AeronMessage;
+import com.ganten.peanuts.protocol.model.TradeProto;
 import io.aeron.Publication;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 @Component
 public class AeronTradePublisher {
 
-    private static final Logger log = LoggerFactory.getLogger(AeronTradePublisher.class);
-
     private final MatchEngineProperties properties;
     private final AeronExecutionReportPublisher reportPublisher;
-    private final TradeEncoder encoder;
 
     private Publication publication;
 
-    public AeronTradePublisher(MatchEngineProperties properties, AeronExecutionReportPublisher reportPublisher,
-            TradeEncoder encoder) {
+    public AeronTradePublisher(MatchEngineProperties properties, AeronExecutionReportPublisher reportPublisher) {
         this.properties = properties;
         this.reportPublisher = reportPublisher;
-        this.encoder = encoder;
     }
 
     @PostConstruct
@@ -44,13 +39,13 @@ public class AeronTradePublisher {
                 properties.getTradeStreamId());
     }
 
-    public void publish(Trade trade) {
+    public void publish(TradeProto trade) {
         if (publication == null) {
             log.error("Trade publication not available, tradeId={}", trade.getTradeId());
             return;
         }
 
-        EncodedMessage encodedMessage = encoder.encode(trade);
+        AeronMessage encodedMessage = TradeCodec.getInstance().encode(trade);
         long result = publication.offer(encodedMessage.getBuffer(), 0, encodedMessage.getLength());
         if (result > 0) {
             log.info("Trade published, tradeId={}, buyOrderId={}, sellOrderId={}, result={}", trade.getTradeId(),

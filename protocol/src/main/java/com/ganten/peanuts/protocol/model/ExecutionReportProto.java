@@ -6,7 +6,7 @@ import com.ganten.peanuts.common.enums.ExecType;
 import com.ganten.peanuts.common.enums.OrderStatus;
 import com.ganten.peanuts.common.enums.Side;
 
-public class ExecutionReport {
+public class ExecutionReportProto {
 
     private long orderId;
     private long counterpartyOrderId;
