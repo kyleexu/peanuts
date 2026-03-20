@@ -37,7 +37,7 @@ public class AccountBeanConfiguration {
     @Bean(name = "tradeAeronProperties")
     public AeronProperties tradeAeronProperties() {
         AeronProperties properties = new AeronProperties();
-        properties.setStreamId(Constants.AERON_STREAM_ID_ACCOUNT_TRADE);
+        properties.setStreamId(Constants.AERON_STREAM_ID_TRADE);
         properties.setChannel(Constants.AERON_CHANNEL);
         properties.setEnabled(Constants.AERON_ENABLED);
         properties.setLaunchEmbeddedDriver(Constants.AERON_LAUNCH_EMBEDDED_DRIVER);
