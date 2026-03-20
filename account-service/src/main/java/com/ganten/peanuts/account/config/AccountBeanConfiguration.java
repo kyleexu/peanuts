@@ -1,7 +1,6 @@
 package com.ganten.peanuts.account.config;
 
 import org.springframework.context.annotation.Configuration;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import io.aeron.CommonContext;
 
@@ -10,8 +9,7 @@ import com.ganten.peanuts.protocol.aeron.AeronProperties;
 @Configuration
 public class AccountBeanConfiguration {
 
-    @Bean
-    @Qualifier("lockResponseAeronProperties")
+    @Bean(name = "lockResponseAeronProperties")
     public AeronProperties lockResponseAeronProperties() {
         AeronProperties properties = new AeronProperties();
         properties.setStreamId(2102);
@@ -23,8 +21,7 @@ public class AccountBeanConfiguration {
         return properties;
     }
 
-    @Bean
-    @Qualifier("lockRequestAeronProperties")
+    @Bean(name = "lockRequestAeronProperties")
     public AeronProperties lockRequestAeronProperties() {
         AeronProperties properties = new AeronProperties();
         properties.setStreamId(2101);
@@ -37,8 +34,7 @@ public class AccountBeanConfiguration {
     }
 
 
-    @Bean
-    @Qualifier("tradeAeronProperties")
+    @Bean(name = "tradeAeronProperties")
     public AeronProperties tradeAeronProperties() {
         AeronProperties properties = new AeronProperties();
         properties.setStreamId(2103);

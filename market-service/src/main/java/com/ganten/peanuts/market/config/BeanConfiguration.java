@@ -1,6 +1,5 @@
 package com.ganten.peanuts.market.config;
 
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -10,8 +9,7 @@ import io.aeron.CommonContext;
 @Configuration
 public class BeanConfiguration {
 
-    @Bean
-    @Qualifier("tradeAeronProperties")
+    @Bean(name = "tradeAeronProperties")
     public AeronProperties tradeAeronProperties() {
         AeronProperties properties = new AeronProperties();
         properties.setEnabled(true);
@@ -23,9 +21,8 @@ public class BeanConfiguration {
         return properties;
     }
 
-    @Bean
-    @Qualifier("orderBookAeronProperties")
-    public AeronProperties orderBookSubscriberAeronProperties() {
+    @Bean(name = "orderBookAeronProperties")
+    public AeronProperties orderBookAeronProperties() {
         AeronProperties properties = new AeronProperties();
         properties.setEnabled(true);
         properties.setChannel("aeron:ipc");

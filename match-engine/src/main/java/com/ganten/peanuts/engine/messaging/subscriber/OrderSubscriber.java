@@ -23,7 +23,7 @@ public class OrderSubscriber extends AbstractAeronSubscriber<OrderProto, OrderCo
     private final OrderBookPublisher orderBookPublisher;
     private final MatchService matchService;
 
-    public OrderSubscriber(@Qualifier("orderBookAeronProperties") AeronProperties properties, OrderBookPublisher orderBookPublisher,
+    public OrderSubscriber(@Qualifier("orderAeronProperties") AeronProperties properties, OrderBookPublisher orderBookPublisher,
             MatchService matchService) {
         super(properties, OrderCodec.getInstance());
         this.orderBookPublisher = orderBookPublisher;

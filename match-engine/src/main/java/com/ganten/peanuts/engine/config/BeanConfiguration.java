@@ -10,7 +10,7 @@ import io.aeron.CommonContext;
 @Configuration
 public class BeanConfiguration {
 
-    @Bean
+    @Bean(name = "executionReportAeronProperties")
     public AeronProperties executionReportAeronProperties() {
         AeronProperties aeronProperties = new AeronProperties();
         aeronProperties.setStreamId(2002);
@@ -22,7 +22,7 @@ public class BeanConfiguration {
         return aeronProperties;
     }
 
-    @Bean
+    @Bean(name = "orderBookAeronProperties")
     public AeronProperties orderBookAeronProperties() {
         AeronProperties aeronProperties = new AeronProperties();
         aeronProperties.setStreamId(2004);
@@ -34,7 +34,7 @@ public class BeanConfiguration {
         return aeronProperties;
     }
 
-    @Bean
+    @Bean(name = "tradeAeronProperties")
     public AeronProperties tradeAeronProperties() {
         AeronProperties aeronProperties = new AeronProperties();
         aeronProperties.setStreamId(2003);
@@ -46,7 +46,7 @@ public class BeanConfiguration {
         return aeronProperties;
     }
 
-    @Bean
+    @Bean(name = "orderAeronProperties")
     public AeronProperties orderAeronProperties() {
         AeronProperties aeronProperties = new AeronProperties();
         aeronProperties.setStreamId(2001);

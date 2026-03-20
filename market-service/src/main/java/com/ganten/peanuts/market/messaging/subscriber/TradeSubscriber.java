@@ -24,7 +24,7 @@ public class TradeSubscriber extends AbstractAeronSubscriber<TradeProto, TradeCo
     private final TickerService tickerService;
     private final CandleService candleService;
 
-    public TradeSubscriber(@Qualifier("tradeSubscriber") AeronProperties aeronProperties,
+    public TradeSubscriber(@Qualifier("tradeAeronProperties") AeronProperties aeronProperties,
             TickerService tickerService,
             CandleService candleService) {
         super(aeronProperties, TradeCodec.getInstance());
