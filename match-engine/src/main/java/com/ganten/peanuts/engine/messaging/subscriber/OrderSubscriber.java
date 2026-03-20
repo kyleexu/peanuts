@@ -42,8 +42,8 @@ public class OrderSubscriber extends AbstractAeronSubscriber<OrderProto, OrderCo
     }
 
     /**
-     * 第 10 步，推送订单簿快照
-     * 关键: 只要是有订单的进入撮合引擎，就需要推送订单簿快照
+     * 第 11 步，推送订单簿快照
+     * 关键: 只要是有订单进入撮合引擎，就需要推送订单簿快照
      */
     private void publishOrderBook(Contract contract) {
         try {

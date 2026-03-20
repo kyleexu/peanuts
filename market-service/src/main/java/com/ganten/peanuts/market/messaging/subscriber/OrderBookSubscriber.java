@@ -3,7 +3,7 @@ package com.ganten.peanuts.market.messaging.subscriber;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
-import com.ganten.peanuts.market.service.OrderBookAggregationService;
+import com.ganten.peanuts.market.service.OrderBookService;
 import com.ganten.peanuts.protocol.aeron.AbstractAeronSubscriber;
 import com.ganten.peanuts.protocol.aeron.AeronProperties;
 import com.ganten.peanuts.protocol.codec.OrderBookCodec;
@@ -15,10 +15,10 @@ import lombok.extern.slf4j.Slf4j;
 @Component
 public class OrderBookSubscriber extends AbstractAeronSubscriber<OrderBookProto, OrderBookCodec> {
 
-    private final OrderBookAggregationService orderBookAggregationService;
+    private final OrderBookService orderBookAggregationService;
 
     public OrderBookSubscriber(@Qualifier("orderBookSubscriber") AeronProperties aeronProperties,
-            OrderBookAggregationService orderBookAggregationService) {
+            OrderBookService orderBookAggregationService) {
         super(aeronProperties, OrderBookCodec.getInstance());
         this.orderBookAggregationService = orderBookAggregationService;
     }

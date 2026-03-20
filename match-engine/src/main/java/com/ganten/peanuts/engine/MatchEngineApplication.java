@@ -9,9 +9,9 @@ import com.ganten.peanuts.engine.config.MatchEngineProperties;
 @SpringBootApplication(scanBasePackages = {"com.ganten.peanuts.engine", "com.ganten.peanuts.protocol"})
 @EnableScheduling
 @EnableConfigurationProperties(MatchEngineProperties.class)
-public class MatchEngine {
+public class MatchEngineApplication {
 
     public static void main(String[] args) {
-        SpringApplication.run(MatchEngine.class, args);
+        SpringApplication.run(MatchEngineApplication.class, args);
     }
 }

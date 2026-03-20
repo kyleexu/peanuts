@@ -1,41 +1,45 @@
-package com.ganten.peanuts.account.messaging.subscriber;
+package com.ganten.peanuts.market.messaging.subscriber;
 
-import javax.annotation.PostConstruct;
-
-import org.agrona.DirectBuffer;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
-import com.ganten.peanuts.account.mapping.TradeProtocolMapper;
-import com.ganten.peanuts.account.service.AccountService;
+
 import com.ganten.peanuts.common.entity.Trade;
+import com.ganten.peanuts.market.mapping.TradeProtocolMapper;
+import com.ganten.peanuts.market.service.CandleService;
+import com.ganten.peanuts.market.service.TickerService;
 import com.ganten.peanuts.protocol.aeron.AbstractAeronSubscriber;
 import com.ganten.peanuts.protocol.aeron.AeronProperties;
 import com.ganten.peanuts.protocol.codec.TradeCodec;
 import com.ganten.peanuts.protocol.model.TradeProto;
+
 import lombok.extern.slf4j.Slf4j;
 
+/**
+ * TradeSubscriber 用于消费成交，并更新市场数据，这里是更新 Ticker 和 K线数据
+ */
 @Slf4j
 @Component
 public class TradeSubscriber extends AbstractAeronSubscriber<TradeProto, TradeCodec> {
 
-    private final AccountService accountService;
+    private final TickerService tickerService;
+    private final CandleService candleService;
 
     public TradeSubscriber(@Qualifier("tradeSubscriber") AeronProperties aeronProperties,
-            AccountService accountService) {
+            TickerService tickerService,
+            CandleService candleService) {
         super(aeronProperties, TradeCodec.getInstance());
-        this.accountService = accountService;
+        this.tickerService = tickerService;
+        this.candleService = candleService;
     }
 
     /**
-     * 第 15 步，消费成交，并结算成交
-     * 关键: 这里需要使用 accountService 结算成交
+     * 第 16 步，消费成交，并更新市场数据
+     * 关键: 这里需要使用 marketDataService 更新市场数据
      */
     @Override
     protected void onMessage(TradeProto message) {
         Trade trade = TradeProtocolMapper.toDomain(message);
-        boolean settled = accountService.applyTrade(trade);
-        if (!settled) {
-            log.warn("Trade settlement skipped due to insufficient locked balance, tradeId={}", trade.getTradeId());
-        }
+        tickerService.onTrade(trade);
+        candleService.onTrade(trade);
     }
 }

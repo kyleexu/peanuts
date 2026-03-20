@@ -15,7 +15,7 @@ import com.ganten.peanuts.protocol.model.OrderBookProto;
 import com.ganten.peanuts.protocol.model.OrderBookProto.OrderLevel;
 
 @Service
-public class OrderBookAggregationService {
+public class OrderBookService {
 
     private static final int DEFAULT_LEVEL = 1;
 
@@ -24,7 +24,7 @@ public class OrderBookAggregationService {
     private final Map<String, OrderBookSnapshot> snapshotsByLevel = new ConcurrentHashMap<String, OrderBookSnapshot>();
     private final WebSocketBroadcaster webSocketBroadcaster;
 
-    public OrderBookAggregationService(WebSocketBroadcaster webSocketBroadcaster) {
+    public OrderBookService(WebSocketBroadcaster webSocketBroadcaster) {
         this.webSocketBroadcaster = webSocketBroadcaster;
     }
 
@@ -43,11 +43,19 @@ public class OrderBookAggregationService {
          */
         rawSnapshots.put(snapshot.getContract(), snapshot);
 
+        /**
+         * 第 13 步，按照 Constants.multiplierList 中的倍数进行订单簿聚合，并存储到 snapshotsByLevel 中。
+         * 关键: 这里需要使用 aggregateByLevel 方法进行订单簿聚合
+         */
         for (int levelMultiplier : Constants.multiplierList) {
             OrderBookSnapshot aggregated = aggregateByLevel(snapshot, levelMultiplier);
             snapshotsByLevel.put(key(snapshot.getContract(), levelMultiplier), aggregated);
         }
 
+        /**
+         * 第 14 步，将默认级别的订单簿快照推送到 WebSocket 客户端。
+         * 关键: 这里需要使用 webSocketBroadcaster 推送订单簿快照
+         */
         OrderBookSnapshot defaultSnapshot = snapshotsByLevel.get(key(snapshot.getContract(), DEFAULT_LEVEL));
         if (defaultSnapshot != null) {
             webSocketBroadcaster.send(MarketMessage.ofOrderBook(defaultSnapshot));
