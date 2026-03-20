@@ -1,5 +1,6 @@
 package com.ganten.peanuts.engine.messaging.subscriber;
 
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
 import com.ganten.peanuts.common.entity.Order;
@@ -22,7 +23,7 @@ public class OrderSubscriber extends AbstractAeronSubscriber<OrderProto, OrderCo
     private final OrderBookPublisher orderBookPublisher;
     private final MatchService matchService;
 
-    public OrderSubscriber(AeronProperties properties, OrderBookPublisher orderBookPublisher,
+    public OrderSubscriber(@Qualifier("orderBookAeronProperties") AeronProperties properties, OrderBookPublisher orderBookPublisher,
             MatchService matchService) {
         super(properties, OrderCodec.getInstance());
         this.orderBookPublisher = orderBookPublisher;

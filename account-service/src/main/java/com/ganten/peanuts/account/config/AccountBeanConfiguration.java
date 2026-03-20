@@ -8,7 +8,7 @@ import io.aeron.CommonContext;
 import com.ganten.peanuts.protocol.aeron.AeronProperties;
 
 @Configuration
-public class BeanConfiguration {
+public class AccountBeanConfiguration {
 
     @Bean
     @Qualifier("lockResponseAeronProperties")

@@ -1,8 +1,5 @@
 package com.ganten.peanuts.account.messaging.subscriber;
 
-import javax.annotation.PostConstruct;
-
-import org.agrona.DirectBuffer;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 import com.ganten.peanuts.account.mapping.TradeProtocolMapper;
@@ -20,7 +17,7 @@ public class TradeSubscriber extends AbstractAeronSubscriber<TradeProto, TradeCo
 
     private final AccountService accountService;
 
-    public TradeSubscriber(@Qualifier("tradeSubscriber") AeronProperties aeronProperties,
+    public TradeSubscriber(@Qualifier("tradeAeronProperties") AeronProperties aeronProperties,
             AccountService accountService) {
         super(aeronProperties, TradeCodec.getInstance());
         this.accountService = accountService;

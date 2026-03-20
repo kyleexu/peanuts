@@ -17,10 +17,10 @@ public class OrderBookSubscriber extends AbstractAeronSubscriber<OrderBookProto,
 
     private final OrderBookService orderBookService;
 
-    public OrderBookSubscriber(@Qualifier("orderBookSubscriber") AeronProperties aeronProperties,
-            OrderBookService orderBookAggregationService) {
+    public OrderBookSubscriber(@Qualifier("orderBookAeronProperties") AeronProperties aeronProperties,
+            OrderBookService orderBookService) {
         super(aeronProperties, OrderBookCodec.getInstance());
-        this.orderBookService = orderBookAggregationService;
+        this.orderBookService = orderBookService;
     }
 
     /**

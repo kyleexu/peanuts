@@ -18,7 +18,7 @@ public class LockResponseSubscriber extends AbstractAeronSubscriber<LockResponse
     private final LockPendingRequests pendingRequests;
 
     public LockResponseSubscriber(
-            @Qualifier("lockResponseSubscriber") AeronProperties aeronProperties,
+            @Qualifier("accountLockAeronResponseProperties") AeronProperties aeronProperties,
             LockPendingRequests pendingRequests) {
         super(aeronProperties, LockResponseCodec.getInstance());
         this.pendingRequests = pendingRequests;

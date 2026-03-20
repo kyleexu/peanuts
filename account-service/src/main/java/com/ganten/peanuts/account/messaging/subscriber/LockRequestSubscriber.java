@@ -23,7 +23,7 @@ public class LockRequestSubscriber extends AbstractAeronSubscriber<LockRequestPr
     private final AccountService accountService;
     private final LockResponsePublisher lockResponsePublisher;
 
-    public LockRequestSubscriber(@Qualifier("lockResponseSubscriber") AeronProperties aeronProperties,
+    public LockRequestSubscriber(@Qualifier("lockRequestAeronProperties") AeronProperties aeronProperties,
             LockResponsePublisher lockResponsePublisher,
             AccountService accountService) {
         super(aeronProperties, LockRequestCodec.getInstance());
