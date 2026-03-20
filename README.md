@@ -135,3 +135,52 @@
 - `market-service/.../messaging/MarketOrderBookAeronSubscriber.java`
 - `common/.../aeron/AeronPollWorker.java`
 
+## 10. 配置治理约定（运维视角）
+
+为避免线上/灰度环境出现“代码与配置认知不一致”，当前项目约定如下：
+
+1. Aeron 关键参数以 `common/.../constant/Constants.java` 为准：
+   - channel（`AERON_CHANNEL`）
+   - streamId（`AERON_STREAM_ID_*`）
+   - driver 策略（`AERON_LAUNCH_EMBEDDED_DRIVER*`）
+   - fragment limit（`AERON_FRAGMENT_LIMIT*`）
+2. 各服务的 `*BeanConfiguration` 只做装配，不再写硬编码字面量。
+3. `@Bean(name = "...AeronProperties")` 与 `@Qualifier("...AeronProperties")` 必须一一对应。
+4. 若需要改 stream/channel，先改常量，再做全链路验证（见下文“变更检查清单”）。
+
+当前 driver 分工：
+
+- `match-engine`：`launchEmbeddedDriver=true`（负责启动 embedded MediaDriver）
+- `order-gateway` / `account-service` / `market-service`：`launchEmbeddedDriver=false`（仅连接现有 driver）
+
+## 11. 启停与健康检查
+
+推荐启动顺序：
+
+1. `match-engine`（先启动 driver 与核心撮合链路）
+2. `account-service`
+3. `market-service`
+4. `order-gateway`
+
+上线前最小检查：
+
+1. 编译检查：`mvn -q compile`
+2. 单测检查：`mvn -q test -DskipITs`
+3. 日志检查（每个服务）：
+   - publisher ready / subscriber ready 是否出现
+   - channel 与 streamId 是否符合本 README 的约定
+4. 业务烟测：
+   - 下单后应看到：锁请求/响应 -> 订单入撮合 -> 成交 -> 账户结算 -> 行情更新
+
+## 12. Stream 变更检查清单
+
+任一 streamId 变更都需要同时核对以下位置：
+
+1. `Constants` 中对应 `AERON_STREAM_ID_*`
+2. 发送端 Bean（publisher 使用的 `...AeronProperties`）
+3. 接收端 Bean（subscriber 使用的 `...AeronProperties`）
+4. README 的 stream 表
+5. 至少一条端到端下单链路验证
+
+建议将每次 stream 变更作为单独 PR，避免和业务逻辑改动混在一起，便于回滚和审计。
+
