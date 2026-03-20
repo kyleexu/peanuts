@@ -7,7 +7,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 import com.ganten.peanuts.account.config.AccountAeronProperties;
 
 @EnableScheduling
-@SpringBootApplication
+@SpringBootApplication(scanBasePackages = {"com.ganten.peanuts.account", "com.ganten.peanuts.protocol"})
 @EnableConfigurationProperties(AccountAeronProperties.class)
 public class AccountApplication {
 

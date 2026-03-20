@@ -6,9 +6,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import com.ganten.peanuts.common.entity.Trade;
-import com.ganten.peanuts.engine.codec.TradeEncoder;
 import com.ganten.peanuts.engine.config.MatchEngineProperties;
-import com.ganten.peanuts.engine.model.EncodedMessage;
+import com.ganten.peanuts.protocol.codec.TradeEncoder;
+import com.ganten.peanuts.protocol.model.EncodedMessage;
 import io.aeron.Publication;
 
 @Component

@@ -3,11 +3,11 @@ package com.ganten.peanuts.engine.service;
 import java.math.BigDecimal;
 import java.util.*;
 import org.springframework.stereotype.Service;
-import com.ganten.peanuts.common.entity.ExecutionReport;
 import com.ganten.peanuts.common.entity.Order;
 import com.ganten.peanuts.common.enums.*;
 import com.ganten.peanuts.engine.model.OrderBook;
 import com.ganten.peanuts.engine.utils.ExecutionReportBuilder;
+import com.ganten.peanuts.protocol.model.ExecutionReport;
 
 @Service
 public class MatchService {

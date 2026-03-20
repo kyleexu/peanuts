@@ -5,7 +5,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import com.ganten.peanuts.market.config.MarketAeronProperties;
 
-@SpringBootApplication
+@SpringBootApplication(scanBasePackages = {"com.ganten.peanuts.market", "com.ganten.peanuts.protocol"})
 @EnableConfigurationProperties(MarketAeronProperties.class)
 public class MarketServiceApplication {
 

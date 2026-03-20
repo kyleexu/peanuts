@@ -4,5 +4,6 @@ import java.util.Arrays;
 import java.util.List;
 
 public class Constants {
-    public static final List<Integer> orderBookLevel = Arrays.asList(1, 5, 10, 50, 100);
+
+    public static final List<Integer> multiplierList = Arrays.asList(1, 5, 10, 50, 100);
 }

@@ -4,9 +4,9 @@ import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
 import org.springframework.stereotype.Component;
 import com.ganten.peanuts.common.entity.Order;
-import com.ganten.peanuts.gateway.OrderEncoder;
 import com.ganten.peanuts.gateway.config.AeronProperties;
-import com.ganten.peanuts.gateway.model.EncodedOrder;
+import com.ganten.peanuts.protocol.codec.OrderEncoder;
+import com.ganten.peanuts.protocol.model.EncodedMessage;
 import io.aeron.Aeron;
 import io.aeron.Publication;
 import lombok.extern.slf4j.Slf4j;
@@ -53,7 +53,7 @@ public class AeronOrderDispatcher implements OrderDispatcher {
             return;
         }
 
-        EncodedOrder encoded = orderEncoder.encode(order);
+        EncodedMessage encoded = orderEncoder.encode(order);
         long result = publication.offer(encoded.getBuffer(), 0, encoded.getLength());
         if (result > 0) {
             log.info("Dispatched order successfully, orderId={}, result={}", order.getOrderId(), result);

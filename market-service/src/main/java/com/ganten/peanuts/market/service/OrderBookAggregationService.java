@@ -6,9 +6,13 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.stereotype.Service;
 import com.ganten.peanuts.common.constant.Constants;
+import com.ganten.peanuts.common.entity.OrderSnapshot;
+import com.ganten.peanuts.common.entity.PriceQuantity;
 import com.ganten.peanuts.common.enums.Contract;
-import com.ganten.peanuts.market.model.*;
+import com.ganten.peanuts.market.model.MarketMessage;
+import com.ganten.peanuts.market.model.OrderBookSnapshot;
 import com.ganten.peanuts.market.websocket.WebSocketBroadcaster;
+import com.ganten.peanuts.protocol.model.RawOrderBookSnapshot;
 
 @Service
 public class OrderBookAggregationService {
@@ -34,25 +38,25 @@ public class OrderBookAggregationService {
 
         rawSnapshots.put(snapshot.getContract(), snapshot);
 
-        for (int levelMultiplier : Constants.orderBookLevel) {
+        for (int levelMultiplier : Constants.multiplierList) {
             OrderBookSnapshot aggregated = aggregateByLevel(snapshot, levelMultiplier);
             snapshotsByLevel.put(key(snapshot.getContract(), levelMultiplier), aggregated);
         }
 
         OrderBookSnapshot defaultSnapshot = snapshotsByLevel.get(key(snapshot.getContract(), DEFAULT_LEVEL));
         if (defaultSnapshot != null) {
-            webSocketBroadcaster.send(MarketDataMessage.ofOrderBook(defaultSnapshot));
+            webSocketBroadcaster.send(MarketMessage.ofOrderBook(defaultSnapshot));
         }
     }
 
     /**
      * controller 请求入口
      */
-    public OrderBookSnapshot orderBook(Contract contract, int levelMultiplier) {
+    public OrderBookSnapshot orderBook(Contract contract, int multiplier) {
         if (contract == null) {
             return null;
         }
-        int normalizedLevel = normalizeLevel(levelMultiplier);
+        int normalizedLevel = this.normalizeMultiplier(multiplier);
         OrderBookSnapshot cached = snapshotsByLevel.get(key(contract, normalizedLevel));
         if (cached != null) {
             return cached;
@@ -71,7 +75,7 @@ public class OrderBookAggregationService {
         BigDecimal levelStep = tickSize.multiply(new BigDecimal(levelMultiplier));
 
         Map<BigDecimal, BigDecimal> bidLevels = new TreeMap<BigDecimal, BigDecimal>(Collections.reverseOrder());
-        for (OrderBookOrderSnapshot order : raw.getBidOrders()) {
+        for (OrderSnapshot order : raw.getBidOrders()) {
             if (order.getPrice() == null || order.getRemainingQuantity() == null
                     || order.getRemainingQuantity().signum() <= 0) {
                 continue;
@@ -81,7 +85,7 @@ public class OrderBookAggregationService {
         }
 
         Map<BigDecimal, BigDecimal> askLevels = new TreeMap<BigDecimal, BigDecimal>();
-        for (OrderBookOrderSnapshot order : raw.getAskOrders()) {
+        for (OrderSnapshot order : raw.getAskOrders()) {
             if (order.getPrice() == null || order.getRemainingQuantity() == null
                     || order.getRemainingQuantity().signum() <= 0) {
                 continue;
@@ -93,16 +97,16 @@ public class OrderBookAggregationService {
         OrderBookSnapshot aggregated = new OrderBookSnapshot();
         aggregated.setContract(raw.getContract());
         aggregated.setTimestamp(raw.getTimestamp());
-        aggregated.setLevelMultiplier(levelMultiplier);
+        aggregated.setMultiplier(levelMultiplier);
         aggregated.setLevelStep(levelStep);
         aggregated.setBids(toLevels(bidLevels));
         aggregated.setAsks(toLevels(askLevels));
         return aggregated;
     }
 
-    private int normalizeLevel(int levelMultiplier) {
-        if (Constants.orderBookLevel.contains(levelMultiplier)) {
-            return levelMultiplier;
+    private int normalizeMultiplier(int multiplier) {
+        if (Constants.multiplierList.contains(multiplier)) {
+            return multiplier;
         }
         return DEFAULT_LEVEL;
     }
@@ -115,10 +119,10 @@ public class OrderBookAggregationService {
         return quotient.multiply(step);
     }
 
-    private List<OrderBookLevelSnapshot> toLevels(Map<BigDecimal, BigDecimal> map) {
-        List<OrderBookLevelSnapshot> result = new ArrayList<OrderBookLevelSnapshot>(map.size());
+    private List<PriceQuantity> toLevels(Map<BigDecimal, BigDecimal> map) {
+        List<PriceQuantity> result = new ArrayList<PriceQuantity>(map.size());
         for (Map.Entry<BigDecimal, BigDecimal> entry : map.entrySet()) {
-            OrderBookLevelSnapshot level = new OrderBookLevelSnapshot();
+            PriceQuantity level = new PriceQuantity();
             level.setPrice(entry.getKey());
             level.setQuantity(entry.getValue());
             result.add(level);
@@ -126,9 +130,7 @@ public class OrderBookAggregationService {
         return result;
     }
 
-
-
-    private String key(Contract contract, int levelMultiplier) {
-        return contract.name() + ":" + levelMultiplier;
+    private String key(Contract contract, int multiplier) {
+        return contract.name() + ":" + multiplier;
     }
 }

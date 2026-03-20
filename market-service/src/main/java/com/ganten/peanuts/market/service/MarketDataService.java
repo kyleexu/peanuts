@@ -7,10 +7,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import com.ganten.peanuts.common.entity.Trade;
+import com.ganten.peanuts.common.enums.CandleInterval;
 import com.ganten.peanuts.common.enums.Contract;
-import com.ganten.peanuts.market.model.CandleInterval;
 import com.ganten.peanuts.market.model.CandleSnapshot;
-import com.ganten.peanuts.market.model.MarketDataMessage;
+import com.ganten.peanuts.market.model.MarketMessage;
 import com.ganten.peanuts.market.model.TickerSnapshot;
 import com.ganten.peanuts.market.websocket.WebSocketBroadcaster;
 
@@ -43,7 +43,7 @@ public class MarketDataService {
             // 推送 Ticker 数据到 WebSocket 客户端
             TickerSnapshot tickerSnapshot = copyTicker(trade.getContract(), state.ticker);
             try {
-                webSocketBroadcaster.send(MarketDataMessage.ofTicker(tickerSnapshot));
+                webSocketBroadcaster.send(MarketMessage.ofTicker(tickerSnapshot));
             } catch (Exception e) {
                 logger.warn("Failed to broadcast ticker update: {}", e.getMessage());
             }
@@ -55,7 +55,7 @@ public class MarketDataService {
                     CandleMutable latestCandle = series.lastEntry().getValue();
                     CandleSnapshot candleSnapshot = copyCandle(trade.getContract(), interval, latestCandle);
                     try {
-                        webSocketBroadcaster.send(MarketDataMessage.ofCandle(candleSnapshot));
+                        webSocketBroadcaster.send(MarketMessage.ofCandle(candleSnapshot));
                     } catch (Exception e) {
                         logger.warn("Failed to broadcast candle update: {}", e.getMessage());
                     }

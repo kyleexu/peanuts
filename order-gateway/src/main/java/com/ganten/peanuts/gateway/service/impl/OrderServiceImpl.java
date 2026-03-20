@@ -5,7 +5,6 @@ import java.util.UUID;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.task.TaskExecutor;
 import org.springframework.stereotype.Service;
-import com.ganten.peanuts.common.entity.AccountLockResponse;
 import com.ganten.peanuts.common.entity.Order;
 import com.ganten.peanuts.common.enums.OrderAction;
 import com.ganten.peanuts.common.enums.OrderStatus;
@@ -15,6 +14,7 @@ import com.ganten.peanuts.gateway.dispatcher.OrderDispatcher;
 import com.ganten.peanuts.gateway.model.AcceptedResponse;
 import com.ganten.peanuts.gateway.model.OrderSubmitRequest;
 import com.ganten.peanuts.gateway.service.OrderService;
+import com.ganten.peanuts.protocol.model.AccountLockResponse;
 
 @Service
 public class OrderServiceImpl implements OrderService {

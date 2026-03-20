@@ -6,10 +6,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import com.ganten.peanuts.common.enums.Contract;
-import com.ganten.peanuts.engine.codec.OrderBookEncoder;
 import com.ganten.peanuts.engine.config.MatchEngineProperties;
-import com.ganten.peanuts.engine.model.EncodedMessage;
 import com.ganten.peanuts.engine.model.OrderBook;
+import com.ganten.peanuts.protocol.codec.OrderBookEncoder;
+import com.ganten.peanuts.protocol.model.EncodedMessage;
 import io.aeron.Aeron;
 import io.aeron.Publication;
 
@@ -61,7 +61,7 @@ public class AeronOrderBookPublisher {
         }
 
         try {
-            EncodedMessage msg = encoder.encode(contract, orderBook);
+            EncodedMessage msg = encoder.encode(contract, orderBook.getBuyOrders(), orderBook.getSellOrders());
             long result = publication.offer(msg.getBuffer(), 0, msg.getLength());
 
             if (result < 0) {

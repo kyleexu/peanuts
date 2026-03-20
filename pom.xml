@@ -7,6 +7,7 @@
     <modules>
         <module>account-service</module>
         <module>common</module>
+        <module>protocol</module>
         <module>market-service</module>
         <module>match-engine</module>
         <module>risk-service</module>

@@ -2,8 +2,8 @@ package com.ganten.peanuts.market.controller;
 
 import java.util.List;
 import org.springframework.web.bind.annotation.*;
+import com.ganten.peanuts.common.enums.CandleInterval;
 import com.ganten.peanuts.common.enums.Contract;
-import com.ganten.peanuts.market.model.CandleInterval;
 import com.ganten.peanuts.market.model.CandleSnapshot;
 import com.ganten.peanuts.market.model.OrderBookSnapshot;
 import com.ganten.peanuts.market.model.TickerSnapshot;

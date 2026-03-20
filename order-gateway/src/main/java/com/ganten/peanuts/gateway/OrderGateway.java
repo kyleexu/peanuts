@@ -6,7 +6,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.scheduling.annotation.EnableScheduling;
 import com.ganten.peanuts.gateway.config.AeronProperties;
 
-@SpringBootApplication
+@SpringBootApplication(scanBasePackages = {"com.ganten.peanuts.gateway", "com.ganten.peanuts.protocol"})
 @EnableScheduling
 @EnableConfigurationProperties(AeronProperties.class)
 public class OrderGateway {

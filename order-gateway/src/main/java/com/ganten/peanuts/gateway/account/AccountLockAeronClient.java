@@ -10,13 +10,14 @@ import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
 import org.springframework.stereotype.Component;
 import com.ganten.peanuts.common.aeron.AeronPollWorker;
-import com.ganten.peanuts.common.entity.AccountLockRequest;
-import com.ganten.peanuts.common.entity.AccountLockResponse;
 import com.ganten.peanuts.common.entity.Order;
 import com.ganten.peanuts.common.enums.Currency;
 import com.ganten.peanuts.common.enums.Side;
 import com.ganten.peanuts.gateway.config.AeronProperties;
-import com.ganten.peanuts.gateway.model.EncodedOrder;
+import com.ganten.peanuts.protocol.codec.AccountLockMessageCodec;
+import com.ganten.peanuts.protocol.model.AccountLockRequest;
+import com.ganten.peanuts.protocol.model.AccountLockResponse;
+import com.ganten.peanuts.protocol.model.EncodedMessage;
 import io.aeron.Aeron;
 import io.aeron.Publication;
 import io.aeron.Subscription;
@@ -57,7 +58,7 @@ public class AccountLockAeronClient {
         CompletableFuture<AccountLockResponse> future = new CompletableFuture<AccountLockResponse>();
         pending.put(Long.valueOf(request.getRequestId()), future);
         try {
-            EncodedOrder encoded = codec.encodeRequest(request);
+            EncodedMessage encoded = codec.encodeRequest(request);
             long result = requestPublication.offer(encoded.getBuffer(), 0, encoded.getLength());
             if (result <= 0) {
                 pending.remove(Long.valueOf(request.getRequestId()));

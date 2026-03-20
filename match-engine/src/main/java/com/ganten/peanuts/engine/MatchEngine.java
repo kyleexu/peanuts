@@ -6,7 +6,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.scheduling.annotation.EnableScheduling;
 import com.ganten.peanuts.engine.config.MatchEngineProperties;
 
-@SpringBootApplication
+@SpringBootApplication(scanBasePackages = {"com.ganten.peanuts.engine", "com.ganten.peanuts.protocol"})
 @EnableScheduling
 @EnableConfigurationProperties(MatchEngineProperties.class)
 public class MatchEngine {

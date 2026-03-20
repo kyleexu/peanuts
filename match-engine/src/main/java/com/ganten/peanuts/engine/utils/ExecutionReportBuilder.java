@@ -1,9 +1,9 @@
 package com.ganten.peanuts.engine.utils;
 
 import java.math.BigDecimal;
-import com.ganten.peanuts.common.entity.ExecutionReport;
 import com.ganten.peanuts.common.entity.Order;
 import com.ganten.peanuts.common.enums.ExecType;
+import com.ganten.peanuts.protocol.model.ExecutionReport;
 
 public class ExecutionReportBuilder {
     public static ExecutionReport buildTradeReport(Order order, long counterpartyOrderId, BigDecimal matchedPrice,
