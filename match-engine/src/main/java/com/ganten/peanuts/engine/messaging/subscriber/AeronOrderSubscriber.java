@@ -7,7 +7,7 @@ import javax.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
-import com.ganten.peanuts.common.aeron.AeronPollWorker;
+
 import com.ganten.peanuts.common.entity.Order;
 import com.ganten.peanuts.common.entity.Trade;
 import com.ganten.peanuts.common.enums.Contract;
@@ -20,40 +20,35 @@ import com.ganten.peanuts.engine.messaging.publisher.AeronOrderBookPublisher;
 import com.ganten.peanuts.engine.messaging.publisher.AeronTradePublisher;
 import com.ganten.peanuts.engine.model.OrderBook;
 import com.ganten.peanuts.engine.service.MatchService;
+import com.ganten.peanuts.protocol.aeron.AbstractAeronSubscriber;
 import com.ganten.peanuts.protocol.codec.OrderCodec;
+import org.agrona.DirectBuffer;
 import com.ganten.peanuts.protocol.model.ExecutionReportProto;
 import com.ganten.peanuts.protocol.model.OrderBookSnapshotProto;
 import com.ganten.peanuts.protocol.model.OrderProto;
 import com.ganten.peanuts.protocol.model.TradeProto;
+import lombok.extern.slf4j.Slf4j;
 
-import io.aeron.Subscription;
-import io.aeron.logbuffer.FragmentHandler;
-
+@Slf4j
 @Component
-public class AeronOrderSubscriber {
-
-    private static final Logger log = LoggerFactory.getLogger(AeronOrderSubscriber.class);
+public class AeronOrderSubscriber extends AbstractAeronSubscriber<OrderProto> {
 
     private final MatchEngineProperties properties;
     private final AeronExecutionReportPublisher publisher;
     private final AeronTradePublisher tradePublisher;
     private final AeronOrderBookPublisher orderBookPublisher;
     private final MatchService matchService;
-    private final ProtocolModelMapper protocolModelMapper;
 
-    private Subscription subscription;
     private final AtomicLong tradeIdGenerator = new AtomicLong(System.currentTimeMillis() * 1_000L);
-    private AeronPollWorker pollWorker;
 
     public AeronOrderSubscriber(MatchEngineProperties properties, AeronExecutionReportPublisher publisher,
             AeronTradePublisher tradePublisher, AeronOrderBookPublisher orderBookPublisher,
-            MatchService matchService, ProtocolModelMapper protocolModelMapper) {
+            MatchService matchService) {
         this.properties = properties;
         this.publisher = publisher;
         this.tradePublisher = tradePublisher;
         this.orderBookPublisher = orderBookPublisher;
         this.matchService = matchService;
-        this.protocolModelMapper = protocolModelMapper;
     }
 
     @PostConstruct
@@ -66,38 +61,34 @@ public class AeronOrderSubscriber {
             return;
         }
         subscription = publisher.aeron().addSubscription(properties.getChannel(), properties.getInboundStreamId());
-        startPollLoop();
+        start("match-engine-order-poller", subscription, properties.getFragmentLimit(),
+                ex -> log.error("Order subscriber poll loop failed", ex));
         log.info("Order subscriber ready. channel={}, streamId={}", properties.getChannel(),
                 properties.getInboundStreamId());
     }
 
-    private void startPollLoop() {
-        final FragmentHandler orderHandler = (buffer, offset, length, header) -> {
-            OrderProto command = OrderCodec.getInstance().decode(buffer, offset);
-            Order order = protocolModelMapper.toDomainOrder(command);
-            log.info("Order received, orderId={}, userId={}", order.getOrderId(), order.getUserId());
-            List<ExecutionReportProto> reports = matchService.match(order);
-            for (ExecutionReportProto report : reports) {
-                publisher.publish(report);
-            }
-            publishTrades(reports);
-
-            // 推送订单簿快照
-            publishOrderBook(order.getContract());
-        };
-        pollWorker = AeronPollWorker.start("match-engine-order-poller",
-                () -> subscription.poll(orderHandler, properties.getFragmentLimit()),
-                ex -> log.error("Order subscriber poll loop failed", ex));
-    }
-
     @PreDestroy
     public void shutdown() {
-        if (pollWorker != null) {
-            pollWorker.close();
+        super.shutdown();
+    }
+
+    @Override
+    protected OrderProto decode(DirectBuffer buffer, int offset) {
+        return OrderCodec.getInstance().decode(buffer, offset);
+    }
+
+    @Override
+    protected void onMessage(OrderProto command) {
+        Order order = ProtocolModelMapper.toDomainOrder(command);
+        log.info("Order received, orderId={}, userId={}", order.getOrderId(), order.getUserId());
+        List<ExecutionReportProto> reports = matchService.match(order);
+        for (ExecutionReportProto report : reports) {
+            publisher.publish(report);
         }
-        if (subscription != null) {
-            subscription.close();
-        }
+        publishTrades(reports);
+
+        // 推送订单簿快照
+        publishOrderBook(order.getContract());
     }
 
     private void publishTrades(List<ExecutionReportProto> reports) {
@@ -138,7 +129,7 @@ public class AeronOrderSubscriber {
             trade.setPrice(buyReport.getMatchedPrice());
             trade.setQuantity(buyReport.getMatchedQuantity());
             trade.setTimestamp(Math.max(buyReport.getTimestamp(), sellReport.getTimestamp()));
-            TradeProto event = protocolModelMapper.toTradeEvent(trade);
+            TradeProto event = ProtocolModelMapper.toTradeEvent(trade);
             tradePublisher.publish(event);
             i++;
         }
@@ -152,7 +143,7 @@ public class AeronOrderSubscriber {
     private void publishOrderBook(Contract contract) {
         try {
             OrderBook orderBook = matchService.getOrderBook(contract);
-            OrderBookSnapshotProto snapshot = protocolModelMapper.toRawOrderBookSnapshot(contract, orderBook);
+            OrderBookSnapshotProto snapshot = ProtocolModelMapper.toRawOrderBookSnapshot(contract, orderBook);
             orderBookPublisher.publish(snapshot);
             log.debug("Order book published for contract={}", contract);
         } catch (Exception e) {

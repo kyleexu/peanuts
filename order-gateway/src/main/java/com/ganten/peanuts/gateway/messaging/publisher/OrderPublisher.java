@@ -4,26 +4,23 @@ import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
 import org.springframework.stereotype.Component;
 import com.ganten.peanuts.common.entity.Order;
-import com.ganten.peanuts.gateway.config.AeronProperties;
 import com.ganten.peanuts.gateway.mapping.OrderProtocolMapper;
+import com.ganten.peanuts.protocol.aeron.AeronProperties;
 import com.ganten.peanuts.protocol.codec.OrderCodec;
 import com.ganten.peanuts.protocol.model.AeronMessage;
 import com.ganten.peanuts.protocol.model.OrderProto;
 import io.aeron.Aeron;
 import io.aeron.Publication;
+import org.springframework.beans.factory.annotation.Qualifier;
 import lombok.extern.slf4j.Slf4j;
+import com.ganten.peanuts.protocol.aeron.AbstractAeronPublisher;
 
 @Slf4j
 @Component
-public class AeronOrderPublisher  {
+public class OrderPublisher  extends AbstractAeronPublisher<OrderProto> {
 
-    private final AeronProperties aeronProperties;
-
-    private Aeron aeron;
-    private Publication publication;
-
-    public AeronOrderPublisher(AeronProperties aeronProperties) {
-        this.aeronProperties = aeronProperties;
+    public OrderPublisher(@Qualifier("orderDispatchAeronProperties") AeronProperties aeronProperties) {
+        super(aeronProperties);
     }
 
     @PostConstruct

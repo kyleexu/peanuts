@@ -1,43 +1,19 @@
 package com.ganten.peanuts.gateway.model;
 
+import javax.validation.constraints.NotNull;
+
 import com.ganten.peanuts.common.enums.Source;
 
+import lombok.Data;
+
+@Data
 public class AcceptedResponse {
-
+    @NotNull
     private String trackingId;
+    @NotNull
     private String message;
+    @NotNull
     private Source source;
+    @NotNull
     private long acceptedAt;
-
-    public String getTrackingId() {
-        return trackingId;
-    }
-
-    public void setTrackingId(String trackingId) {
-        this.trackingId = trackingId;
-    }
-
-    public String getMessage() {
-        return message;
-    }
-
-    public void setMessage(String message) {
-        this.message = message;
-    }
-
-    public Source getSource() {
-        return source;
-    }
-
-    public void setSource(Source source) {
-        this.source = source;
-    }
-
-    public long getAcceptedAt() {
-        return acceptedAt;
-    }
-
-    public void setAcceptedAt(long acceptedAt) {
-        this.acceptedAt = acceptedAt;
-    }
 }

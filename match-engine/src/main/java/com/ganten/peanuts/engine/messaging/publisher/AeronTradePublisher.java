@@ -5,19 +5,17 @@ import javax.annotation.PreDestroy;
 import org.springframework.stereotype.Component;
 import com.ganten.peanuts.engine.config.MatchEngineProperties;
 import com.ganten.peanuts.protocol.codec.TradeCodec;
-import com.ganten.peanuts.protocol.model.AeronMessage;
 import com.ganten.peanuts.protocol.model.TradeProto;
-import io.aeron.Publication;
 import lombok.extern.slf4j.Slf4j;
+import com.ganten.peanuts.protocol.aeron.AbstractAeronPublisher;
+import com.ganten.peanuts.protocol.model.AeronMessage;
 
 @Slf4j
 @Component
-public class AeronTradePublisher {
+public class AeronTradePublisher extends AbstractAeronPublisher<TradeProto> {
 
     private final MatchEngineProperties properties;
     private final AeronExecutionReportPublisher reportPublisher;
-
-    private Publication publication;
 
     public AeronTradePublisher(MatchEngineProperties properties, AeronExecutionReportPublisher reportPublisher) {
         this.properties = properties;
@@ -34,19 +32,23 @@ public class AeronTradePublisher {
             return;
         }
 
-        publication = reportPublisher.aeron().addPublication(properties.getChannel(), properties.getTradeStreamId());
+        setPublication(reportPublisher.aeron().addPublication(properties.getChannel(), properties.getTradeStreamId()));
         log.info("Trade publisher ready. channel={}, streamId={}", properties.getChannel(),
                 properties.getTradeStreamId());
     }
 
-    public void publish(TradeProto trade) {
-        if (publication == null) {
-            log.error("Trade publication not available, tradeId={}", trade.getTradeId());
-            return;
-        }
+    @Override
+    protected AeronMessage encode(TradeProto message) {
+        return TradeCodec.getInstance().encode(message);
+    }
 
-        AeronMessage encodedMessage = TradeCodec.getInstance().encode(trade);
-        long result = publication.offer(encodedMessage.getBuffer(), 0, encodedMessage.getLength());
+    @Override
+    protected void onPublicationUnavailable(TradeProto trade) {
+        log.error("Trade publication not available, tradeId={}", trade.getTradeId());
+    }
+
+    @Override
+    protected void onOfferResult(TradeProto trade, long result) {
         if (result > 0) {
             log.info("Trade published, tradeId={}, buyOrderId={}, sellOrderId={}, result={}", trade.getTradeId(),
                     trade.getBuyOrderId(), trade.getSellOrderId(), result);
@@ -57,8 +59,6 @@ public class AeronTradePublisher {
 
     @PreDestroy
     public void shutdown() {
-        if (publication != null) {
-            publication.close();
-        }
+        super.shutdown();
     }
 }

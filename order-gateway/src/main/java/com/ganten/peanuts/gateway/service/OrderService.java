@@ -9,23 +9,23 @@ import com.ganten.peanuts.common.entity.Order;
 import com.ganten.peanuts.common.enums.OrderAction;
 import com.ganten.peanuts.common.enums.OrderStatus;
 import com.ganten.peanuts.common.enums.Source;
-import com.ganten.peanuts.gateway.account.AccountLockAeronClient;
+import com.ganten.peanuts.gateway.account.AccountLockService;
 import com.ganten.peanuts.gateway.model.AcceptedResponse;
 import com.ganten.peanuts.gateway.model.OrderSubmitRequest;
 import com.ganten.peanuts.protocol.model.LockResponseProto;
-import com.ganten.peanuts.gateway.messaging.publisher.AeronOrderPublisher;
+import com.ganten.peanuts.gateway.messaging.publisher.OrderPublisher;
 
 @Service
 public class OrderService {
 
-    private final AeronOrderPublisher orderPublisher;
-    private final AccountLockAeronClient accountLockAeronClient;
+    private final OrderPublisher orderPublisher;
+    private final AccountLockService accountLockService;
     private final TaskExecutor orderDispatchExecutor;
 
-    public OrderService(AeronOrderPublisher orderPublisher, AccountLockAeronClient accountLockAeronClient,
+    public OrderService(OrderPublisher orderPublisher, AccountLockService accountLockService,
             @Qualifier("orderDispatchExecutor") TaskExecutor orderDispatchExecutor) {
         this.orderPublisher = orderPublisher;
-        this.accountLockAeronClient = accountLockAeronClient;
+        this.accountLockService = accountLockService;
         this.orderDispatchExecutor = orderDispatchExecutor;
     }
 
@@ -51,7 +51,7 @@ public class OrderService {
             throw new IllegalArgumentException("targetOrderId is required for MODIFY/CANCEL action");
         }
 
-        return submitOrder(order);
+        return this.submitOrder(order);
     }
 
 
@@ -76,7 +76,7 @@ public class OrderService {
         }
 
         if (order.getAction() == OrderAction.NEW) {
-            LockResponseProto lockResponse = accountLockAeronClient.checkAndLock(order);
+            LockResponseProto lockResponse = accountLockService.checkAndLock(order);
             if (!lockResponse.isSuccess()) {
                 throw new IllegalArgumentException("account lock failed: " + lockResponse.getMessage());
             }

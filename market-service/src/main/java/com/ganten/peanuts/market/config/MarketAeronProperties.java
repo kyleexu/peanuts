@@ -2,37 +2,17 @@ package com.ganten.peanuts.market.config;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
-@ConfigurationProperties(prefix = "market.aeron")
-public class MarketAeronProperties {
+import com.ganten.peanuts.protocol.aeron.AeronProperties;
 
-    private boolean enabled = true;
-    private String channel = "aeron:ipc";
+@ConfigurationProperties(prefix = "market.aeron")
+public class MarketAeronProperties extends AeronProperties {
+
     private int tradeStreamId = 2003;
     private int orderBookStreamId = 2004;
-    private int fragmentLimit = 100;
 
-    public boolean isEnabled() {
-        return enabled;
-    }
-
-    public void setEnabled(boolean enabled) {
-        this.enabled = enabled;
-    }
-
-    public String getChannel() {
-        return channel;
-    }
-
-    public void setChannel(String channel) {
-        this.channel = channel;
-    }
-
-    public int getTradeStreamId() {
-        return tradeStreamId;
-    }
-
-    public void setTradeStreamId(int tradeStreamId) {
-        this.tradeStreamId = tradeStreamId;
+    public MarketAeronProperties() {
+        // keep previous default (market-service was 100)
+        setFragmentLimit(100);
     }
 
     public int getOrderBookStreamId() {
@@ -43,11 +23,11 @@ public class MarketAeronProperties {
         this.orderBookStreamId = orderBookStreamId;
     }
 
-    public int getFragmentLimit() {
-        return fragmentLimit;
+    public int getTradeStreamId() {
+        return tradeStreamId;
     }
 
-    public void setFragmentLimit(int fragmentLimit) {
-        this.fragmentLimit = fragmentLimit;
+    public void setTradeStreamId(int tradeStreamId) {
+        this.tradeStreamId = tradeStreamId;
     }
 }

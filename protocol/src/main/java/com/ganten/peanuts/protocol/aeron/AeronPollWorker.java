@@ -1,7 +1,6 @@
-package com.ganten.peanuts.common.aeron;
+package com.ganten.peanuts.protocol.aeron;
 
 import java.util.function.Consumer;
-import java.util.function.IntSupplier;
 import org.agrona.concurrent.BackoffIdleStrategy;
 import org.agrona.concurrent.IdleStrategy;
 
@@ -10,28 +9,23 @@ public final class AeronPollWorker implements AutoCloseable {
     private final Thread thread;
     private volatile boolean running;
 
-    private AeronPollWorker(String threadName, IntSupplier pollAction, Consumer<Throwable> errorHandler) {
+    private AeronPollWorker(Runnable pollAction, Consumer<Throwable> errorHandler) {
         this.running = true;
-        this.thread = new Thread(() -> runLoop(pollAction, errorHandler), threadName);
+        this.thread = new Thread(() -> runLoop(pollAction, errorHandler));
         this.thread.setDaemon(true);
         this.thread.start();
     }
 
-    public static AeronPollWorker start(String threadName, IntSupplier pollAction, Consumer<Throwable> errorHandler) {
-        if (pollAction == null) {
-            throw new IllegalArgumentException("pollAction must not be null");
-        }
-        Consumer<Throwable> safeErrorHandler = errorHandler == null ? t -> {
-        } : errorHandler;
-        return new AeronPollWorker(threadName, pollAction, safeErrorHandler);
+    public static AeronPollWorker start(Runnable pollAction, Consumer<Throwable> errorHandler) {
+        return new AeronPollWorker(pollAction, errorHandler);
     }
 
-    private void runLoop(IntSupplier pollAction, Consumer<Throwable> errorHandler) {
+    private void runLoop(Runnable pollAction, Consumer<Throwable> errorHandler) {
         IdleStrategy idleStrategy = new BackoffIdleStrategy(100, 10, 1, 1000);
         while (running) {
             try {
-                int fragments = pollAction.getAsInt();
-                idleStrategy.idle(fragments);
+                pollAction.run();
+                idleStrategy.idle();
             } catch (Throwable throwable) {
                 if (!running) {
                     break;

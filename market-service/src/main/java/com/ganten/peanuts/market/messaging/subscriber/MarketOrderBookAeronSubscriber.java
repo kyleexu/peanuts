@@ -3,27 +3,26 @@ package com.ganten.peanuts.market.messaging.subscriber;
 import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
 import org.springframework.stereotype.Component;
-import com.ganten.peanuts.common.aeron.AeronPollWorker;
+
 import com.ganten.peanuts.market.config.MarketAeronProperties;
 import com.ganten.peanuts.market.service.OrderBookAggregationService;
+import com.ganten.peanuts.protocol.aeron.AbstractAeronSubscriber;
 import com.ganten.peanuts.protocol.codec.OrderBookCodec;
 import com.ganten.peanuts.protocol.model.OrderBookSnapshotProto;
 
 import io.aeron.Aeron;
 import io.aeron.Subscription;
-import io.aeron.logbuffer.FragmentHandler;
 import lombok.extern.slf4j.Slf4j;
+import org.agrona.DirectBuffer;
 
 @Slf4j
 @Component
-public class MarketOrderBookAeronSubscriber {
+public class MarketOrderBookAeronSubscriber extends AbstractAeronSubscriber<OrderBookSnapshotProto> {
 
     private final MarketAeronProperties properties;
     private final OrderBookAggregationService orderBookAggregationService;
 
     private Aeron aeron;
-    private Subscription subscription;
-    private AeronPollWorker pollWorker;
 
     public MarketOrderBookAeronSubscriber(MarketAeronProperties properties,
             OrderBookAggregationService orderBookAggregationService) {
@@ -37,32 +36,28 @@ public class MarketOrderBookAeronSubscriber {
             return;
         }
         aeron = Aeron.connect();
-        subscription = aeron.addSubscription(properties.getChannel(), properties.getOrderBookStreamId());
-        startPollLoop();
+        Subscription subscription = aeron.addSubscription(properties.getChannel(), properties.getOrderBookStreamId());
+        start("market-orderbook-aeron-poller", subscription, properties.getFragmentLimit(),
+                ex -> log.error("Market order-book poll loop failed", ex));
         log.info("Market order-book subscriber ready. channel={}, streamId={}", properties.getChannel(),
                 properties.getOrderBookStreamId());
     }
 
-    private void startPollLoop() {
-        final FragmentHandler orderBookHandler = (buffer, offset, length, header) -> {
-            OrderBookSnapshotProto snapshot = OrderBookCodec.getInstance().decode(buffer, offset);
-            orderBookAggregationService.onOrderBook(snapshot);
-        };
-        pollWorker = AeronPollWorker.start("market-orderbook-aeron-poller",
-                () -> subscription.poll(orderBookHandler, properties.getFragmentLimit()),
-                ex -> log.error("Market order-book poll loop failed", ex));
-    }
-
     @PreDestroy
     public void shutdown() {
-        if (pollWorker != null) {
-            pollWorker.close();
-        }
-        if (subscription != null) {
-            subscription.close();
-        }
+        super.shutdown();
         if (aeron != null) {
             aeron.close();
         }
+    }
+
+    @Override
+    protected OrderBookSnapshotProto decode(DirectBuffer buffer, int offset) {
+        return OrderBookCodec.getInstance().decode(buffer, offset);
+    }
+
+    @Override
+    protected void onMessage(OrderBookSnapshotProto snapshot) {
+        orderBookAggregationService.onOrderBook(snapshot);
     }
 }

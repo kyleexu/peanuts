@@ -4,7 +4,6 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.PriorityQueue;
-import org.springframework.stereotype.Component;
 import com.ganten.peanuts.common.entity.Order;
 import com.ganten.peanuts.common.entity.Trade;
 import com.ganten.peanuts.common.enums.Contract;
@@ -14,10 +13,9 @@ import com.ganten.peanuts.protocol.model.OrderProto;
 import com.ganten.peanuts.protocol.model.TradeProto;
 import com.ganten.peanuts.protocol.model.OrderBookSnapshotProto.OrderLevel;
 
-@Component
 public class ProtocolModelMapper {
 
-    public Order toDomainOrder(OrderProto command) {
+    public static Order toDomainOrder(OrderProto command) {
         Order order = new Order();
         order.setOrderId(command.getOrderId());
         order.setUserId(command.getUserId());
@@ -35,7 +33,7 @@ public class ProtocolModelMapper {
         return order;
     }
 
-    public TradeProto toTradeEvent(Trade trade) {
+    public static TradeProto toTradeEvent(Trade trade) {
         TradeProto event = new TradeProto();
         event.setTradeId(trade.getTradeId());
         event.setBuyOrderId(trade.getBuyOrderId());
@@ -49,7 +47,7 @@ public class ProtocolModelMapper {
         return event;
     }
 
-    public OrderBookSnapshotProto toRawOrderBookSnapshot(Contract contract, OrderBook orderBook) {
+    public static OrderBookSnapshotProto toRawOrderBookSnapshot(Contract contract, OrderBook orderBook) {
         OrderBookSnapshotProto snapshot = new OrderBookSnapshotProto();
         snapshot.setContract(contract);
         snapshot.setTimestamp(System.currentTimeMillis());
@@ -58,7 +56,7 @@ public class ProtocolModelMapper {
         return snapshot;
     }
 
-    private List<OrderLevel> toOrderLevels(PriorityQueue<Order> orders) {
+    private static List<OrderLevel> toOrderLevels(PriorityQueue<Order> orders) {
         List<OrderLevel> levels = new ArrayList<OrderLevel>(orders.size());
         for (Order order : orders) {
             OrderLevel level = new OrderLevel();

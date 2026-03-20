@@ -5,7 +5,7 @@ import javax.annotation.PreDestroy;
 import org.springframework.stereotype.Component;
 import com.ganten.peanuts.account.config.AccountAeronProperties;
 import com.ganten.peanuts.account.service.AccountService;
-import com.ganten.peanuts.common.aeron.AeronPollWorker;
+import com.ganten.peanuts.protocol.aeron.AeronPollWorker;
 import com.ganten.peanuts.protocol.codec.LockRequestCodec;
 import com.ganten.peanuts.protocol.codec.LockResponseCodec;
 import com.ganten.peanuts.protocol.model.LockRequestProto;
@@ -22,9 +22,7 @@ import lombok.extern.slf4j.Slf4j;
 public class AccountLockAeronProcessor {
 
     private final AccountAeronProperties properties;
-    private final AccountService accountService;
-
-    private Aeron aeron;
+    private final AccountService accountService;    private Aeron aeron;
     private Subscription requestSubscription;
     private Publication responsePublication;
     private AeronPollWorker pollWorker;
@@ -37,6 +35,7 @@ public class AccountLockAeronProcessor {
     @PostConstruct
     public void init() {
         if (!properties.isEnabled()) {
+            log.warn("Account lock Aeron processor disabled by config");
             return;
         }
         aeron = Aeron.connect();

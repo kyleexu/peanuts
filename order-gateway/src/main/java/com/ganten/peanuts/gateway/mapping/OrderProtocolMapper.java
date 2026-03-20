@@ -3,7 +3,6 @@ package com.ganten.peanuts.gateway.mapping;
 import com.ganten.peanuts.common.entity.Order;
 import com.ganten.peanuts.protocol.model.OrderProto;
 
-
 public class OrderProtocolMapper {
 
     public static OrderProto toProto(Order order) {

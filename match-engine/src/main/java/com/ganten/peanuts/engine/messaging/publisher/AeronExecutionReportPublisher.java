@@ -7,14 +7,14 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import com.ganten.peanuts.engine.config.MatchEngineProperties;
 import com.ganten.peanuts.protocol.codec.ExecutionReportCodec;
-import com.ganten.peanuts.protocol.model.AeronMessage;
 import com.ganten.peanuts.protocol.model.ExecutionReportProto;
+import com.ganten.peanuts.protocol.aeron.AbstractAeronPublisher;
 import io.aeron.Aeron;
-import io.aeron.Publication;
 import io.aeron.driver.MediaDriver;
+import com.ganten.peanuts.protocol.model.AeronMessage;
 
 @Component
-public class AeronExecutionReportPublisher {
+public class AeronExecutionReportPublisher extends AbstractAeronPublisher<ExecutionReportProto> {
 
     private static final Logger log = LoggerFactory.getLogger(AeronExecutionReportPublisher.class);
 
@@ -22,10 +22,10 @@ public class AeronExecutionReportPublisher {
 
     private MediaDriver mediaDriver;
     private Aeron aeron;
-    private Publication publication;
 
     public AeronExecutionReportPublisher(MatchEngineProperties properties) {
         this.properties = properties;
+        super(properties.getAeronProperties());
     }
 
     @PostConstruct
@@ -45,19 +45,23 @@ public class AeronExecutionReportPublisher {
         Aeron.Context context = new Aeron.Context();
         context.aeronDirectoryName(properties.getDirectory());
         aeron = Aeron.connect(context);
-        publication = aeron.addPublication(properties.getChannel(), properties.getOutboundStreamId());
+        setPublication(aeron.addPublication(properties.getChannel(), properties.getOutboundStreamId()));
         log.info("Execution report publisher ready. dir={}, channel={}, streamId={}", properties.getDirectory(),
                 properties.getChannel(), properties.getOutboundStreamId());
     }
 
-    public void publish(ExecutionReportProto report) {
-        if (publication == null) {
-            log.error("Execution report publication not available, orderId={}", report.getOrderId());
-            return;
-        }
+    @Override
+    protected AeronMessage encode(ExecutionReportProto report) {
+        return ExecutionReportCodec.getInstance().encode(report);
+    }
 
-        AeronMessage encodedMessage = ExecutionReportCodec.getInstance().encode(report);
-        long result = publication.offer(encodedMessage.getBuffer(), 0, encodedMessage.getLength());
+    @Override
+    protected void onPublicationUnavailable(ExecutionReportProto report) {
+        log.error("Execution report publication not available, orderId={}", report.getOrderId());
+    }
+
+    @Override
+    protected void onOfferResult(ExecutionReportProto report, long result) {
         if (result > 0) {
             log.info("Execution report published, orderId={}, result={}", report.getOrderId(), result);
         } else {
@@ -71,9 +75,7 @@ public class AeronExecutionReportPublisher {
 
     @PreDestroy
     public void shutdown() {
-        if (publication != null) {
-            publication.close();
-        }
+        super.shutdown();
         if (aeron != null) {
             aeron.close();
         }

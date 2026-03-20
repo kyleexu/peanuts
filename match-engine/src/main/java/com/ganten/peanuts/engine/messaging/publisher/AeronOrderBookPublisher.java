@@ -7,24 +7,24 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import com.ganten.peanuts.engine.config.MatchEngineProperties;
 import com.ganten.peanuts.protocol.codec.OrderBookCodec;
-import com.ganten.peanuts.protocol.model.AeronMessage;
 import com.ganten.peanuts.protocol.model.OrderBookSnapshotProto;
+import com.ganten.peanuts.protocol.aeron.AbstractAeronPublisher;
+import com.ganten.peanuts.protocol.model.AeronMessage;
 
+import lombok.extern.slf4j.Slf4j;
 import io.aeron.Aeron;
-import io.aeron.Publication;
 
 /**
  * 订单簿 Aeron 发布者，用于推送订单簿快照到 Aeron channel
  */
+@Slf4j
 @Component
-public class AeronOrderBookPublisher {
+public class AeronOrderBookPublisher extends AbstractAeronPublisher<OrderBookSnapshotProto> {
 
-    private static final Logger log = LoggerFactory.getLogger(AeronOrderBookPublisher.class);
 
     private final MatchEngineProperties properties;
 
     private Aeron aeron;
-    private Publication publication;
 
     public AeronOrderBookPublisher(MatchEngineProperties properties) {
         this.properties = properties;
@@ -41,32 +41,31 @@ public class AeronOrderBookPublisher {
         Aeron.Context context = new Aeron.Context();
         context.aeronDirectoryName(properties.getDirectory());
         aeron = Aeron.connect(context);
-        publication = aeron.addPublication(properties.getChannel(), properties.getOrderBookStreamId());
+        setPublication(aeron.addPublication(properties.getChannel(), properties.getOrderBookStreamId()));
         log.info("Order book publisher ready. dir={}, channel={}, streamId={}", properties.getDirectory(),
                 properties.getChannel(), properties.getOrderBookStreamId());
     }
 
-    /**
-     * 发布订单簿快照
-     *
-     * @param snapshot 订单簿快照
-     */
-    public void publish(OrderBookSnapshotProto snapshot) {
-        if (publication == null) {
-            log.error("Order book publication not available, contract={}", snapshot.getContract());
-            return;
-        }
+    @Override
+    protected AeronMessage encode(OrderBookSnapshotProto snapshot) {
+        return OrderBookCodec.getInstance().encode(snapshot);
+    }
 
-        try {
-            AeronMessage msg = OrderBookCodec.getInstance().encode(snapshot);
-            long result = publication.offer(msg.getBuffer(), 0, msg.getLength());
+    @Override
+    protected void onPublicationUnavailable(OrderBookSnapshotProto snapshot) {
+        log.error("Order book publication not available, contract={}", snapshot.getContract());
+    }
 
-            if (result < 0) {
-                log.warn("Failed to publish order book, contract={}, result={}", snapshot.getContract(), result);
-            }
-        } catch (Exception e) {
-            log.error("Error publishing order book, contract={}", snapshot.getContract(), e);
+    @Override
+    protected void onOfferResult(OrderBookSnapshotProto snapshot, long result) {
+        if (result < 0) {
+            log.warn("Failed to publish order book, contract={}, result={}", snapshot.getContract(), result);
         }
+    }
+
+    @Override
+    protected void onPublishError(OrderBookSnapshotProto snapshot, Throwable error) {
+        log.error("Error publishing order book, contract={}", snapshot.getContract(), error);
     }
 
     public Aeron aeron() {
@@ -75,9 +74,7 @@ public class AeronOrderBookPublisher {
 
     @PreDestroy
     public void shutdown() {
-        if (publication != null) {
-            publication.close();
-        }
+        super.shutdown();
         if (aeron != null) {
             aeron.close();
         }
