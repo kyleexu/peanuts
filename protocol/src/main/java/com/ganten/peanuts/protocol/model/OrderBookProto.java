@@ -15,25 +15,18 @@ import lombok.NoArgsConstructor;
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
-public class OrderBookSnapshotProto {
+public class OrderBookProto {
 
-    // 合约类型
     private Contract contract;
-
-    // 快照生成时间戳，单位毫秒
     private long timestamp;
 
-    // 存储聚合之后的买单
     private List<OrderLevel> bidOrders = new ArrayList<OrderLevel>();
-
-    // 存储聚合之后的卖单
     private List<OrderLevel> askOrders = new ArrayList<OrderLevel>();
 
     @Data
     @AllArgsConstructor
     @NoArgsConstructor
     public static class OrderLevel {
-
         private long orderId;
         private long userId;
         private BigDecimal price;
@@ -41,6 +34,5 @@ public class OrderBookSnapshotProto {
         private BigDecimal filledQuantity;
         private BigDecimal remainingQuantity;
         private long timestamp;
-
     }
 }

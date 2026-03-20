@@ -12,6 +12,7 @@ import com.ganten.peanuts.common.enums.Source;
 import com.ganten.peanuts.gateway.account.AccountLockService;
 import com.ganten.peanuts.gateway.model.AcceptedResponse;
 import com.ganten.peanuts.gateway.model.OrderSubmitRequest;
+import com.ganten.peanuts.gateway.mapping.OrderProtocolMapper;
 import com.ganten.peanuts.protocol.model.LockResponseProto;
 import com.ganten.peanuts.gateway.messaging.publisher.OrderPublisher;
 
@@ -82,7 +83,7 @@ public class OrderService {
             }
         }
 
-        orderDispatchExecutor.execute(() -> orderPublisher.publish(order));
+        orderDispatchExecutor.execute(() -> orderPublisher.offer(OrderProtocolMapper.toProto(order)));
 
         AcceptedResponse response = new AcceptedResponse();
         response.setTrackingId(UUID.randomUUID().toString());

@@ -1,6 +1,9 @@
 package com.ganten.peanuts.protocol.aeron;
 
+import javax.annotation.PostConstruct;
 import io.aeron.Publication;
+
+import com.ganten.peanuts.protocol.codec.AbstractCodec;
 import com.ganten.peanuts.protocol.model.AeronMessage;
 import io.aeron.Aeron;
 import lombok.extern.slf4j.Slf4j;
@@ -11,16 +14,19 @@ import lombok.extern.slf4j.Slf4j;
  * - 具体 encode 由子类实现
  */
 @Slf4j
-public abstract class AbstractAeronPublisher<M> implements AutoCloseable {
+public abstract class AbstractAeronPublisher<M, N extends AbstractCodec<M>> implements AutoCloseable {
 
     protected Aeron aeron;
     protected Publication publication;
     protected final AeronProperties properties;
+    protected final N codec;
 
-    public AbstractAeronPublisher(AeronProperties properties) {
+    public AbstractAeronPublisher(AeronProperties properties, N codec) {
         this.properties = properties;
+        this.codec = codec;
     }
 
+    @PostConstruct
     protected void start() {
         if (!properties.isEnabled()) {
             log.warn("Aeron publisher disabled by config");
@@ -29,13 +35,16 @@ public abstract class AbstractAeronPublisher<M> implements AutoCloseable {
         try {
             aeron = Aeron.connect();
             publication = aeron.addPublication(properties.getChannel(), properties.getStreamId());
-            log.info("Aeron publisher ready. channel={}, streamId={}", properties.getChannel(), properties.getStreamId());
+            log.info("Aeron publisher ready. channel={}, streamId={}", properties.getChannel(),
+                    properties.getStreamId());
         } catch (Exception e) {
             log.error("Failed to initialize Aeron publisher", e);
         }
     }
 
-    protected abstract AeronMessage encode(M message);
+    protected AeronMessage encode(M message) {
+        return codec.encode(message);
+    }
 
     public void offer(M message) {
         if (publication == null || message == null) {
@@ -77,4 +86,3 @@ public abstract class AbstractAeronPublisher<M> implements AutoCloseable {
         this.shutdown();
     }
 }
-

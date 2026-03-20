@@ -7,10 +7,10 @@ import org.agrona.DirectBuffer;
 import org.agrona.concurrent.UnsafeBuffer;
 import com.ganten.peanuts.common.enums.Contract;
 import com.ganten.peanuts.protocol.model.AeronMessage;
-import com.ganten.peanuts.protocol.model.OrderBookSnapshotProto;
-import com.ganten.peanuts.protocol.model.OrderBookSnapshotProto.OrderLevel;
+import com.ganten.peanuts.protocol.model.OrderBookProto;
+import com.ganten.peanuts.protocol.model.OrderBookProto.OrderLevel;
 
-public class OrderBookCodec extends AbstractCodec<OrderBookSnapshotProto> {
+public class OrderBookCodec extends AbstractCodec<OrderBookProto> {
 
     private static final OrderBookCodec INSTANCE = new OrderBookCodec();
 
@@ -25,7 +25,7 @@ public class OrderBookCodec extends AbstractCodec<OrderBookSnapshotProto> {
     }
 
     @Override
-    public AeronMessage encode(OrderBookSnapshotProto snapshot) {
+    public AeronMessage encode(OrderBookProto snapshot) {
         byte[] bytes = new byte[4096];
         UnsafeBuffer buffer = new UnsafeBuffer(bytes);
         int offset = 0;
@@ -43,9 +43,9 @@ public class OrderBookCodec extends AbstractCodec<OrderBookSnapshotProto> {
     }
 
     @Override
-    public OrderBookSnapshotProto decode(DirectBuffer buffer, int offset) {
+    public OrderBookProto decode(DirectBuffer buffer, int offset) {
         int currentOffset = offset;
-        OrderBookSnapshotProto snapshot = new OrderBookSnapshotProto();
+        OrderBookProto snapshot = new OrderBookProto();
 
         int contractOrdinal = buffer.getInt(currentOffset);
         currentOffset += 4;

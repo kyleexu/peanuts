@@ -11,16 +11,16 @@ import com.ganten.peanuts.common.enums.Contract;
 import com.ganten.peanuts.market.model.MarketMessage;
 import com.ganten.peanuts.market.model.OrderBookSnapshot;
 import com.ganten.peanuts.market.websocket.WebSocketBroadcaster;
-import com.ganten.peanuts.protocol.model.OrderBookSnapshotProto;
-import com.ganten.peanuts.protocol.model.OrderBookSnapshotProto.OrderLevel;
+import com.ganten.peanuts.protocol.model.OrderBookProto;
+import com.ganten.peanuts.protocol.model.OrderBookProto.OrderLevel;
 
 @Service
 public class OrderBookAggregationService {
 
     private static final int DEFAULT_LEVEL = 1;
 
-    private final Map<Contract, OrderBookSnapshotProto> rawSnapshots =
-            new ConcurrentHashMap<Contract, OrderBookSnapshotProto>();
+    private final Map<Contract, OrderBookProto> rawSnapshots =
+            new ConcurrentHashMap<Contract, OrderBookProto>();
     private final Map<String, OrderBookSnapshot> snapshotsByLevel = new ConcurrentHashMap<String, OrderBookSnapshot>();
     private final WebSocketBroadcaster webSocketBroadcaster;
 
@@ -31,7 +31,7 @@ public class OrderBookAggregationService {
     /**
      * 消息处理入口
      */
-    public void onOrderBook(OrderBookSnapshotProto snapshot) {
+    public void onOrderBook(OrderBookProto snapshot) {
         if (snapshot == null || snapshot.getContract() == null) {
             return;
         }
@@ -61,7 +61,7 @@ public class OrderBookAggregationService {
         if (cached != null) {
             return cached;
         }
-        OrderBookSnapshotProto raw = rawSnapshots.get(contract);
+        OrderBookProto raw = rawSnapshots.get(contract);
         if (raw == null) {
             return null;
         }
@@ -70,7 +70,7 @@ public class OrderBookAggregationService {
         return aggregated;
     }
 
-    private OrderBookSnapshot aggregateByLevel(OrderBookSnapshotProto raw, int levelMultiplier) {
+    private OrderBookSnapshot aggregateByLevel(OrderBookProto raw, int levelMultiplier) {
         BigDecimal tickSize = BigDecimal.valueOf(raw.getContract().getTickSize());
         BigDecimal levelStep = tickSize.multiply(new BigDecimal(levelMultiplier));
 

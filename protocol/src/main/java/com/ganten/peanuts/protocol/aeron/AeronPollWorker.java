@@ -13,6 +13,7 @@ public final class AeronPollWorker implements AutoCloseable {
         this.running = true;
         this.thread = new Thread(() -> runLoop(pollAction, errorHandler));
         this.thread.setDaemon(true);
+        this.thread.setName("aeron-poll-worker");
         this.thread.start();
     }
 
@@ -30,7 +31,9 @@ public final class AeronPollWorker implements AutoCloseable {
                 if (!running) {
                     break;
                 }
-                errorHandler.accept(throwable);
+                if (errorHandler != null) {
+                    errorHandler.accept(throwable);
+                }
             }
         }
     }

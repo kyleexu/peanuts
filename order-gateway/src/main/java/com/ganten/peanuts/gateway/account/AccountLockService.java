@@ -11,7 +11,6 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import com.ganten.peanuts.common.entity.Order;
 import com.ganten.peanuts.common.enums.Currency;
 import com.ganten.peanuts.common.enums.Side;
-import com.ganten.peanuts.protocol.aeron.AeronProperties;
 import com.ganten.peanuts.common.constant.Constants;
 import com.ganten.peanuts.protocol.model.LockRequestProto;
 import com.ganten.peanuts.protocol.model.LockResponseProto;
@@ -46,13 +45,7 @@ public class AccountLockService {
         long requestId = request.getRequestId();
         CompletableFuture<LockResponseProto> future = pendingRequests.put(requestId);
         try {
-            // Publish request and wait for response completion (by
-            // AccountLockResponseSubscriber).
-            long result = requestPublisher.publish(request);
-            if (result <= 0) {
-                pendingRequests.remove(requestId);
-                return fail(requestId, "account lock request back pressured");
-            }
+            requestPublisher.offer(request);
             return future.get(Constants.ACCOUNT_LOCK_TIMEOUT_MS, TimeUnit.MILLISECONDS);
         } catch (Exception ex) {
             pendingRequests.remove(requestId);

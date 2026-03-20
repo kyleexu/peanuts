@@ -1,13 +1,11 @@
 package com.ganten.peanuts.account.mapping;
 
-import org.springframework.stereotype.Component;
 import com.ganten.peanuts.common.entity.Trade;
 import com.ganten.peanuts.protocol.model.TradeProto;
 
-@Component
 public class TradeProtocolMapper {
 
-    public Trade toDomain(TradeProto event) {
+    public static Trade toDomain(TradeProto event) {
         Trade trade = new Trade();
         trade.setTradeId(event.getTradeId());
         trade.setBuyOrderId(event.getBuyOrderId());

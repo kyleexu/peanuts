@@ -8,10 +8,10 @@ import com.ganten.peanuts.common.entity.Order;
 import com.ganten.peanuts.common.entity.Trade;
 import com.ganten.peanuts.common.enums.Contract;
 import com.ganten.peanuts.engine.model.OrderBook;
-import com.ganten.peanuts.protocol.model.OrderBookSnapshotProto;
+import com.ganten.peanuts.protocol.model.OrderBookProto;
 import com.ganten.peanuts.protocol.model.OrderProto;
 import com.ganten.peanuts.protocol.model.TradeProto;
-import com.ganten.peanuts.protocol.model.OrderBookSnapshotProto.OrderLevel;
+import com.ganten.peanuts.protocol.model.OrderBookProto.OrderLevel;
 
 public class ProtocolModelMapper {
 
@@ -47,8 +47,8 @@ public class ProtocolModelMapper {
         return event;
     }
 
-    public static OrderBookSnapshotProto toRawOrderBookSnapshot(Contract contract, OrderBook orderBook) {
-        OrderBookSnapshotProto snapshot = new OrderBookSnapshotProto();
+    public static OrderBookProto toRawOrderBookSnapshot(Contract contract, OrderBook orderBook) {
+        OrderBookProto snapshot = new OrderBookProto();
         snapshot.setContract(contract);
         snapshot.setTimestamp(System.currentTimeMillis());
         snapshot.setBidOrders(toOrderLevels(orderBook.getBuyOrders()));
