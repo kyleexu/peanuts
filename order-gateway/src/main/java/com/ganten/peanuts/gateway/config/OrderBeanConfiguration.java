@@ -4,10 +4,11 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.task.TaskExecutor;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
+import com.ganten.peanuts.common.constant.Constants;
 import com.ganten.peanuts.protocol.aeron.AeronProperties;
 
 @Configuration
-public class GatewayBeanConfiguration {
+public class OrderBeanConfiguration {
 
     /**
      * 订单分发的AeronProperties
@@ -17,10 +18,10 @@ public class GatewayBeanConfiguration {
     @Bean(name = "orderDispatchAeronProperties")
     public AeronProperties orderDispatchAeronProperties() {
         AeronProperties properties = new AeronProperties();
-        properties.setStreamId(2001);
-        properties.setChannel("aeron:ipc");
-        properties.setEnabled(true);
-        properties.setFragmentLimit(10);
+        properties.setStreamId(Constants.AERON_STREAM_ID_ORDER);
+        properties.setChannel(Constants.AERON_CHANNEL);
+        properties.setEnabled(Constants.AERON_ENABLED);
+        properties.setFragmentLimit(Constants.AERON_FRAGMENT_LIMIT);
         return properties;
     }
 
@@ -32,10 +33,10 @@ public class GatewayBeanConfiguration {
     @Bean(name = "accountLockAeronRequestProperties")
     public AeronProperties accountLockAeronRequestProperties() {
         AeronProperties properties = new AeronProperties();
-        properties.setStreamId(2101);
-        properties.setChannel("aeron:ipc");
-        properties.setEnabled(true);
-        properties.setFragmentLimit(10);
+        properties.setStreamId(Constants.AERON_STREAM_ID_LOCK_REQUEST);
+        properties.setChannel(Constants.AERON_CHANNEL);
+        properties.setEnabled(Constants.AERON_ENABLED);
+        properties.setFragmentLimit(Constants.AERON_FRAGMENT_LIMIT);
         return properties;
     }
 
@@ -47,10 +48,10 @@ public class GatewayBeanConfiguration {
     @Bean(name = "accountLockAeronResponseProperties")
     public AeronProperties accountLockAeronResponseProperties() {
         AeronProperties properties = new AeronProperties();
-        properties.setStreamId(2102);
-        properties.setChannel("aeron:ipc");
-        properties.setEnabled(true);
-        properties.setFragmentLimit(20);
+        properties.setStreamId(Constants.AERON_STREAM_ID_LOCK_RESPONSE);
+        properties.setChannel(Constants.AERON_CHANNEL);
+        properties.setEnabled(Constants.AERON_ENABLED);
+        properties.setFragmentLimit(Constants.AERON_FRAGMENT_LIMIT_LOCK_RESPONSE);
         return properties;
     }
 
