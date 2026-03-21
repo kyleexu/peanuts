@@ -22,6 +22,8 @@ public class OrderBeanConfiguration {
         properties.setChannel(Constants.AERON_CHANNEL);
         properties.setEnabled(Constants.AERON_ENABLED);
         properties.setFragmentLimit(Constants.AERON_FRAGMENT_LIMIT);
+        properties.setLaunchEmbeddedDriver(Constants.AERON_LAUNCH_EMBEDDED_DRIVER);
+        properties.setDirectory(Constants.AERON_DIRECTORY);
         return properties;
     }
 
@@ -37,6 +39,8 @@ public class OrderBeanConfiguration {
         properties.setChannel(Constants.AERON_CHANNEL);
         properties.setEnabled(Constants.AERON_ENABLED);
         properties.setFragmentLimit(Constants.AERON_FRAGMENT_LIMIT);
+        properties.setLaunchEmbeddedDriver(Constants.AERON_LAUNCH_EMBEDDED_DRIVER);
+        properties.setDirectory(Constants.AERON_DIRECTORY);
         return properties;
     }
 
@@ -52,6 +56,23 @@ public class OrderBeanConfiguration {
         properties.setChannel(Constants.AERON_CHANNEL);
         properties.setEnabled(Constants.AERON_ENABLED);
         properties.setFragmentLimit(Constants.AERON_FRAGMENT_LIMIT_LOCK_RESPONSE);
+        properties.setLaunchEmbeddedDriver(Constants.AERON_LAUNCH_EMBEDDED_DRIVER);
+        properties.setDirectory(Constants.AERON_DIRECTORY);
+        return properties;
+    }
+
+    /**
+     * 执行回报（match → order），与 README 中 stream 2002 一致。
+     */
+    @Bean(name = "executionReportAeronProperties")
+    public AeronProperties executionReportAeronProperties() {
+        AeronProperties properties = new AeronProperties();
+        properties.setStreamId(Constants.AERON_STREAM_ID_EXECUTION_REPORT);
+        properties.setChannel(Constants.AERON_CHANNEL);
+        properties.setEnabled(Constants.AERON_ENABLED);
+        properties.setFragmentLimit(Constants.AERON_FRAGMENT_LIMIT);
+        properties.setLaunchEmbeddedDriver(Constants.AERON_LAUNCH_EMBEDDED_DRIVER);
+        properties.setDirectory(Constants.AERON_DIRECTORY);
         return properties;
     }
 

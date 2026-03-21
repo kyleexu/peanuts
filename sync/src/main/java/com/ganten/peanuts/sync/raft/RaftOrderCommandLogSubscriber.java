@@ -1,9 +1,12 @@
 package com.ganten.peanuts.sync.raft;
 
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
 import com.ganten.peanuts.common.constant.Constants;
+import com.ganten.peanuts.sync.kafka.RaftLogDelivery;
+import com.ganten.peanuts.sync.kafka.RaftLogKafkaBridge;
 import com.ganten.peanuts.protocol.aeron.AbstractAeronSubscriber;
 import com.ganten.peanuts.protocol.aeron.AeronProperties;
 import com.ganten.peanuts.protocol.codec.OrderCodec;
@@ -18,9 +21,13 @@ import lombok.extern.slf4j.Slf4j;
 @Component
 public class RaftOrderCommandLogSubscriber extends AbstractAeronSubscriber<OrderProto, OrderCodec> {
 
+    private final ObjectProvider<RaftLogKafkaBridge> kafkaBridge;
+
     public RaftOrderCommandLogSubscriber(
-            @Qualifier("syncOrderCommandAeronProperties") AeronProperties aeronProperties) {
+            @Qualifier("syncOrderCommandAeronProperties") AeronProperties aeronProperties,
+            ObjectProvider<RaftLogKafkaBridge> kafkaBridge) {
         super(aeronProperties, OrderCodec.getInstance());
+        this.kafkaBridge = kafkaBridge;
     }
 
     @Override
@@ -39,5 +46,6 @@ public class RaftOrderCommandLogSubscriber extends AbstractAeronSubscriber<Order
                 message.getTimestamp(),
                 message.getAction(),
                 message.getTargetOrderId());
+        RaftLogDelivery.maybePublish(kafkaBridge, "order", Constants.AERON_STREAM_ID_ORDER, "OrderCommand", message);
     }
 }

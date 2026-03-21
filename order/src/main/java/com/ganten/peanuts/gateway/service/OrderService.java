@@ -10,6 +10,7 @@ import com.ganten.peanuts.common.enums.OrderAction;
 import com.ganten.peanuts.common.enums.OrderStatus;
 import com.ganten.peanuts.common.enums.Source;
 import com.ganten.peanuts.gateway.account.AccountLockService;
+import com.ganten.peanuts.gateway.cache.OrderCache;
 import com.ganten.peanuts.gateway.model.AcceptedResponse;
 import com.ganten.peanuts.gateway.model.OrderSubmitRequest;
 import com.ganten.peanuts.gateway.mapping.OrderProtocolMapper;
@@ -22,12 +23,15 @@ public class OrderService {
     private final OrderPublisher orderPublisher;
     private final AccountLockService accountLockService;
     private final TaskExecutor orderDispatchExecutor;
+    private final OrderCache orderCache;
 
     public OrderService(OrderPublisher orderPublisher, AccountLockService accountLockService,
-            @Qualifier("orderDispatchExecutor") TaskExecutor orderDispatchExecutor) {
+            @Qualifier("orderDispatchExecutor") TaskExecutor orderDispatchExecutor,
+            OrderCache orderCache) {
         this.orderPublisher = orderPublisher;
         this.accountLockService = accountLockService;
         this.orderDispatchExecutor = orderDispatchExecutor;
+        this.orderCache = orderCache;
     }
 
     /**
@@ -84,6 +88,10 @@ public class OrderService {
             if (!lockResponse.isSuccess()) {
                 throw new IllegalArgumentException("account lock failed: " + lockResponse.getMessage());
             }
+        }
+
+        if (order.getAction() == OrderAction.NEW) {
+            orderCache.put(order);
         }
 
         /**

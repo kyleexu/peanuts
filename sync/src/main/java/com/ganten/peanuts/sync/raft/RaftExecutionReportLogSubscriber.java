@@ -1,9 +1,12 @@
 package com.ganten.peanuts.sync.raft;
 
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
 import com.ganten.peanuts.common.constant.Constants;
+import com.ganten.peanuts.sync.kafka.RaftLogDelivery;
+import com.ganten.peanuts.sync.kafka.RaftLogKafkaBridge;
 import com.ganten.peanuts.protocol.aeron.AbstractAeronSubscriber;
 import com.ganten.peanuts.protocol.aeron.AeronProperties;
 import com.ganten.peanuts.protocol.codec.ExecutionReportCodec;
@@ -18,9 +21,13 @@ import lombok.extern.slf4j.Slf4j;
 @Component
 public class RaftExecutionReportLogSubscriber extends AbstractAeronSubscriber<ExecutionReportProto, ExecutionReportCodec> {
 
+    private final ObjectProvider<RaftLogKafkaBridge> kafkaBridge;
+
     public RaftExecutionReportLogSubscriber(
-            @Qualifier("syncExecutionReportAeronProperties") AeronProperties aeronProperties) {
+            @Qualifier("syncExecutionReportAeronProperties") AeronProperties aeronProperties,
+            ObjectProvider<RaftLogKafkaBridge> kafkaBridge) {
         super(aeronProperties, ExecutionReportCodec.getInstance());
+        this.kafkaBridge = kafkaBridge;
     }
 
     @Override
@@ -40,5 +47,6 @@ public class RaftExecutionReportLogSubscriber extends AbstractAeronSubscriber<Ex
                 message.getMatchedPrice(),
                 message.getMatchedQuantity(),
                 message.getTimestamp());
+        RaftLogDelivery.maybePublish(kafkaBridge, "match", Constants.AERON_STREAM_ID_EXECUTION_REPORT, "ExecutionReport", message);
     }
 }
