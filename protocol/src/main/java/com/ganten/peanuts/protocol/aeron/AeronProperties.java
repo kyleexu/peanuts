@@ -15,10 +15,10 @@ public class AeronProperties {
     private String channel = "aeron:ipc";
     private int streamId = 0;
 
-    // match-engine uses embedded driver (kept for compatibility)
+    // match uses embedded driver (kept for compatibility)
     private boolean launchEmbeddedDriver = true;
     private String directory = CommonContext.getAeronDirectoryName();
 
-    // Used by subscribers (match-engine/market), harmless default elsewhere
+    // Used by subscribers (match/market), harmless default elsewhere
     private int fragmentLimit = 50;
 }

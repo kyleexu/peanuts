@@ -5,15 +5,15 @@
     <modelVersion>4.0.0</modelVersion>
 
     <modules>
-        <module>account-service</module>
+        <module>account</module>
         <module>common</module>
         <module>protocol</module>
-        <module>market-service</module>
-        <module>match-engine</module>
-        <module>risk-service</module>
-        <module>order-gateway</module>
-        <module>pressure-test</module>
-        <module>monitor-dashboard</module>
+        <module>market</module>
+        <module>match</module>
+        <module>risk</module>
+        <module>order</module>
+        <module>test</module>
+        <module>monitor</module>
     </modules>
 
     <artifactId>peanuts</artifactId>

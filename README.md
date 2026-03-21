@@ -10,13 +10,13 @@
 
 1. 请求-响应（Request/Response）
 
-- 示例：order-gateway 请求 account-service 做资金锁定。
+- 示例：order 请求 account 做资金锁定。
 - 发送端通过 `Publication.offer(...)` 发请求。
 - 再通过响应流读取对应 `requestId` 的结果并等待完成。
 
 1. 单向分发（One-way / Fire-and-forget）
 
-- 示例：order-gateway 向 match-engine 异步分发订单。
+- 示例：order 向 match 异步分发订单。
 - 仅 `offer(...)` 投递，不等待回包。
 
 注意：Aeron 底层发送 API 都是 `offer`，区别在业务协议是否定义了“回响应流”。
@@ -25,17 +25,17 @@
 
 ### 3.1 下单主链路
 
-1. order-gateway 收到下单请求。
-2. `AccountLockAeronClient` 发锁定请求到 account-service。
-3. account-service 消费请求并返回锁定结果。
-4. 锁定成功后，order-gateway 通过 `AeronOrderDispatcher` 分发订单到 match-engine（发送端：`Order` -> `protocol.OrderCommand` -> `OrderCodec.encode` -> Aeron `offer(...)`）。
-5. match-engine 的 `AeronOrderSubscriber` 订阅订单并撮合（接收端：`OrderCodec.decode` 解码 `OrderCommand` -> 映射为 domain `Order` -> `matchService.match(...)`）。
-6. match-engine 发布两类下游数据：
+1. order 收到下单请求。
+2. `AccountLockAeronClient` 发锁定请求到 account。
+3. account 消费请求并返回锁定结果。
+4. 锁定成功后，order 通过 `AeronOrderDispatcher` 分发订单到 match（发送端：`Order` -> `protocol.OrderCommand` -> `OrderCodec.encode` -> Aeron `offer(...)`）。
+5. match 的 `AeronOrderSubscriber` 订阅订单并撮合（接收端：`OrderCodec.decode` 解码 `OrderCommand` -> 映射为 domain `Order` -> `matchService.match(...)`）。
+6. match 发布两类下游数据：
   - 执行回报 execution report：`AeronExecutionReportPublisher`（协议模型在 `protocol.model.ExecutionReport`）。
   - 成交 trade：`AeronTradePublisher`（domain `Trade` -> `protocol.TradeEvent` -> `TradeCodec.encode`）。
-7. match-engine 还会发布订单簿快照到下游（domain `OrderBook` -> `protocol.RawOrderBookSnapshot` -> `OrderBookCodec.encode`）。
-8. account-service 的 `AccountTradeAeronProcessor` 消费成交流（`TradeCodec.decode` 解码 `TradeEvent` -> 映射为 domain `Trade` -> `accountService.applyTrade(...)`）。
-9. market-service 消费成交与订单簿流：
+7. match 还会发布订单簿快照到下游（domain `OrderBook` -> `protocol.RawOrderBookSnapshot` -> `OrderBookCodec.encode`）。
+8. account 的 `AccountTradeAeronProcessor` 消费成交流（`TradeCodec.decode` 解码 `TradeEvent` -> 映射为 domain `Trade` -> `accountService.applyTrade(...)`）。
+9. market 消费成交与订单簿流：
   - 成交：`MarketTradeAeronSubscriber`（`TradeEvent` -> domain `Trade` -> `marketDataService.onTrade(...)`）
   - 订单簿：`MarketOrderBookAeronSubscriber`（`RawOrderBookSnapshot` -> `OrderBookAggregationService.onOrderBook(...)`）
 
@@ -46,13 +46,13 @@
 
 | streamId | 发送                | 接收                | 用途     | 传输模型                                  |
 | -------- | ----------------- | ----------------- | ------ | ------------------------------------- |
-| 2101     | `order-gateway`   | `account-service` | 资金锁定请求 | `protocol.model.AccountLockRequest`   |
-| 2102     | `account-service` | `order-gateway`   | 资金锁定响应 | `protocol.model.AccountLockResponse`  |
-| 2001     | `order-gateway`   | `match-engine`    | 订单入站   | `protocol.model.OrderCommand`         |
-| 2002     | `match-engine`    | `null`            | 执行回报   | `protocol.model.ExecutionReport`      |
-| 2003     | `match-engine`    | `account-service` | 成交明细   | `protocol.model.TradeEvent`           |
-| 2003     | `match-engine`    | `market-service`  | 成交明细   | `protocol.model.TradeEvent`           |
-| 2004     | `match-engine`    | `market-service`  | 订单簿快照  | `protocol.model.RawOrderBookSnapshot` |
+| 2101     | `order`   | `account` | 资金锁定请求 | `protocol.model.AccountLockRequest`   |
+| 2102     | `account` | `order`   | 资金锁定响应 | `protocol.model.AccountLockResponse`  |
+| 2001     | `order`   | `match`    | 订单入站   | `protocol.model.OrderCommand`         |
+| 2002     | `match`    | `null`            | 执行回报   | `protocol.model.ExecutionReport`      |
+| 2003     | `match`    | `account` | 成交明细   | `protocol.model.TradeEvent`           |
+| 2003     | `match`    | `market`  | 成交明细   | `protocol.model.TradeEvent`           |
+| 2004     | `match`    | `market`  | 订单簿快照  | `protocol.model.RawOrderBookSnapshot` |
 
 
 对于 `传输模型` 编解码器整理：
@@ -123,16 +123,16 @@
 
 ## 9. 相关代码位置
 
-- `order-gateway/.../account/AccountLockAeronClient.java`
-- `account-service/.../messaging/AccountLockAeronProcessor.java`
-- `order-gateway/.../dispatcher/AeronOrderDispatcher.java`
-- `match-engine/.../messaging/AeronOrderSubscriber.java`
-- `match-engine/.../messaging/AeronExecutionReportPublisher.java`
-- `match-engine/.../messaging/AeronTradePublisher.java`
-- `match-engine/.../messaging/AeronOrderBookPublisher.java`
-- `account-service/.../messaging/AccountTradeAeronProcessor.java`
-- `market-service/.../messaging/MarketTradeAeronSubscriber.java`
-- `market-service/.../messaging/MarketOrderBookAeronSubscriber.java`
+- `order/.../account/AccountLockAeronClient.java`
+- `account/.../messaging/AccountLockAeronProcessor.java`
+- `order/.../dispatcher/AeronOrderDispatcher.java`
+- `match/.../messaging/AeronOrderSubscriber.java`
+- `match/.../messaging/AeronExecutionReportPublisher.java`
+- `match/.../messaging/AeronTradePublisher.java`
+- `match/.../messaging/AeronOrderBookPublisher.java`
+- `account/.../messaging/AccountTradeAeronProcessor.java`
+- `market/.../messaging/MarketTradeAeronSubscriber.java`
+- `market/.../messaging/MarketOrderBookAeronSubscriber.java`
 - `common/.../aeron/AeronPollWorker.java`
 
 ## 10. 配置治理约定（运维视角）
@@ -150,17 +150,17 @@
 
 当前 driver 分工：
 
-- `match-engine`：`launchEmbeddedDriver=true`（负责启动 embedded MediaDriver）
-- `order-gateway` / `account-service` / `market-service`：`launchEmbeddedDriver=false`（仅连接现有 driver）
+- `match`：`launchEmbeddedDriver=true`（负责启动 embedded MediaDriver）
+- `order` / `account` / `market`：`launchEmbeddedDriver=false`（仅连接现有 driver）
 
 ## 11. 启停与健康检查
 
 推荐启动顺序：
 
-1. `match-engine`（先启动 driver 与核心撮合链路）
-2. `account-service`
-3. `market-service`
-4. `order-gateway`
+1. `match`（先启动 driver 与核心撮合链路）
+2. `account`
+3. `market`
+4. `order`
 
 上线前最小检查：
 

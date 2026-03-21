@@ -1,0 +1,9 @@
+match:
+    aeron:
+        enabled: true
+        launch-embedded-driver: true
+        channel: aeron:ipc
+        inbound-stream-id: 2001
+        outbound-stream-id: 2002
+        trade-stream-id: 2003
+        fragment-limit: 10
