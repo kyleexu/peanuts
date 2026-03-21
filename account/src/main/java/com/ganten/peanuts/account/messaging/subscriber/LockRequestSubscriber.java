@@ -3,8 +3,6 @@ package com.ganten.peanuts.account.messaging.subscriber;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
-import com.alipay.sofa.jraft.Closure;
-import com.alipay.sofa.jraft.Status;
 import com.ganten.peanuts.account.messaging.publisher.LockResponsePublisher;
 import com.ganten.peanuts.account.service.AccountService;
 import com.ganten.peanuts.protocol.aeron.AbstractAeronSubscriber;
@@ -18,9 +16,10 @@ import lombok.extern.slf4j.Slf4j;
 /**
  * Aeron: account -> order
  * <p>
- * {@code account.raft.enabled=false}：仅 Aeron，走 {@link #onMessage}。<br>
- * {@code account.raft.enabled=true}：propose 后由 {@link #onRaftCommitted} 与
- * {@link #onMessage} 共用 {@link #applyLockRequest}（跟随者仅锁、不回包）。
+ * 无 Raft：{@link #onMessage} 走内存 {@link AccountService#tryLock}。<br>
+ * 有 Raft：仅将编码后的命令通过 {@link com.ganten.peanuts.protocol.raft.RaftApplyClient} 写入
+ * Raft 日志（propose），
+ * 不在此链路处理业务；propose 被 leader 接受后由 {@link #onRaftAccepted} 发回执。
  */
 @Slf4j
 @Component
@@ -35,15 +34,6 @@ public class LockRequestSubscriber extends AbstractAeronSubscriber<LockRequestPr
         super(aeronProperties, LockRequestCodec.getInstance());
         this.accountService = accountService;
         this.lockResponsePublisher = lockResponsePublisher;
-    }
-
-    @Override
-    protected void onRaftRejected(LockRequestProto message, String reason) {
-        LockResponseProto lockResponseProto = new LockResponseProto();
-        lockResponseProto.setRequestId(message.getRequestId());
-        lockResponseProto.setSuccess(false);
-        lockResponseProto.setMessage(reason);
-        lockResponsePublisher.offer(lockResponseProto);
     }
 
     @Override

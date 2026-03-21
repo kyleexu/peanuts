@@ -6,6 +6,7 @@ import javax.annotation.PostConstruct;
 
 import org.agrona.DirectBuffer;
 
+import com.alipay.sofa.jraft.Closure;
 import com.alipay.sofa.jraft.Status;
 import com.ganten.peanuts.protocol.codec.AbstractCodec;
 import com.ganten.peanuts.protocol.model.AeronMessage;
@@ -20,17 +21,6 @@ import io.aeron.Subscription;
 import io.aeron.logbuffer.FragmentHandler;
 import lombok.extern.slf4j.Slf4j;
 
-/**
- * Aeron Subscriber template:
- * - 负责启动/停止 poll loop
- * - 负责在 FragmentHandler 中 decode -> onMessage
- * - 可选：若 {@link AeronProperties#isRaftEnabled()} 为 true，状态机默认回调
- * {@link #onRaftCommitted}，
- * 其默认仅在 {@code localApply} 时调用 {@link #onMessage}；多副本且跟随者需执行相同逻辑时请覆盖
- * {@link #onRaftCommitted}。
- * 亦可覆盖 {@link #raftMessageApplyHandler()} 或 {@link #createRaftApplyClient()}
- * 完全自定义。
- */
 @Slf4j
 public abstract class AbstractAeronSubscriber<M, N extends AbstractCodec<M>> implements AutoCloseable {
 
@@ -53,33 +43,27 @@ public abstract class AbstractAeronSubscriber<M, N extends AbstractCodec<M>> imp
         return codec.decode(buffer, offset);
     }
 
+    /**
+     * 仅在不走 Raft 时由 Aeron poll 线程调用，表示「内存路径」上的业务处理。
+     */
     protected abstract void onMessage(M message);
 
     /**
-     * 非空时优先于 {@link #onRaftCommitted} 作为状态机 handler（完全自定义装配时用）。
+     * Raft 状态机 apply：默认不做业务，仅完成 JRaft 的 {@code done} 回调（日志已由 Raft 层持久化/复制）。
      */
-    protected RaftMessageApplyHandler<M> raftMessageApplyHandler() {
-        return (message, localApply, done) -> {
-            if (localApply) {
-                onMessage(message);
-                if (done != null) {
-                    done.run(Status.OK());
-                }
-            }
-        };
+    protected void onRaftLogCommitted(M message, boolean localApply, Closure done) {
+        // 如果在这里调用，那么就是速度慢的，但是 raft 一致性可以保证
+        this.onMessage(message);
+        if (localApply && done != null) {
+            done.run(Status.OK());
+        }
     }
 
-    /**
-     * 当 {@link AeronProperties#isRaftEnabled()} 为 true 时由
-     * {@link #initRaftFromProperties()} 调用；默认用
-     * {@link CodecRaftStateMachine} + {@link RaftBootstrap} 装配，子类可覆盖。
-     */
-    protected RaftApplyClient createRaftApplyClient() {
+    private RaftApplyClient createRaftApplyClient() {
         if (!properties.isRaftEnabled()) {
             return null;
         }
-        RaftMessageApplyHandler<M> handler = raftMessageApplyHandler();
-        CodecRaftStateMachine<M, N> fsm = new CodecRaftStateMachine<>(codec, handler);
+        CodecRaftStateMachine<M, N> fsm = new CodecRaftStateMachine<>(codec, this::onRaftLogCommitted);
         RaftBootstrap bootstrap = new RaftBootstrap(properties.toRaftProperties(), fsm);
         try {
             bootstrap.start();
@@ -89,59 +73,36 @@ public abstract class AbstractAeronSubscriber<M, N extends AbstractCodec<M>> imp
         return new RaftApplyClient(bootstrap);
     }
 
-    /**
-     * 是否走 Raft 路径：以是否成功创建 {@link #raftApplyClient} 为准（配置开启但无 handler / 启动失败则不会为
-     * true）。
-     */
-    protected boolean useRaft() {
-        return raftApplyClient != null;
-    }
-
-    protected boolean shouldApplyRaftWhenLocal() {
-        return properties.isRaftEnabled() && useRaft();
-    }
-
-    protected void onRaftAccepted(M message) {
-        log.debug("Raft apply accepted, streamId={}", properties.getStreamId());
-    }
-
-    protected void onRaftRejected(M message, String reason) {
-        log.warn("Raft apply rejected, streamId={}, reason={}", properties.getStreamId(), reason);
-    }
-
     private void initRaftFromProperties() {
-        if (properties == null || !properties.isRaftEnabled()) {
-            return;
-        }
         try {
-            this.raftApplyClient = createRaftApplyClient();
+            if (properties != null && properties.isRaftEnabled()) {
+                this.raftApplyClient = createRaftApplyClient();
+            }
         } catch (Exception e) {
             log.error("Failed to init Raft client from AeronProperties, streamId={}", properties.getStreamId(), e);
         }
     }
 
     private void handleMessage(M message) {
-        if (useRaft()) {
-            if (raftApplyClient == null) {
-                onRaftRejected(message, "raft client not initialized");
-                return;
-            }
+        // 如果在这里调用，那么就是速度快的，但是 raft 一致性没办法保证
+        // this.onMessage(message);
+        if (properties.isRaftEnabled() && raftApplyClient != null) {
             try {
                 AeronMessage aeronMessage = codec.encode(message);
                 byte[] payload = new byte[aeronMessage.getLength()];
                 aeronMessage.getBuffer().getBytes(0, payload);
                 RaftApplyResult result = raftApplyClient.apply(payload);
                 if (result.isAccepted()) {
-                    onRaftAccepted(message);
+                    log.debug("Raft apply accepted, streamId={}", properties.getStreamId());
                 } else {
-                    onRaftRejected(message, result.getReason());
+                    log.warn("Raft apply rejected, streamId={}, reason={}", properties.getStreamId(),
+                            result.getReason());
                 }
             } catch (Throwable t) {
-                onRaftRejected(message, t.getMessage());
+                log.error("Raft apply failed, streamId={}, reason={}", properties.getStreamId(), t.getMessage());
             }
             return;
         }
-        onMessage(message);
     }
 
     @PostConstruct
@@ -176,19 +137,15 @@ public abstract class AbstractAeronSubscriber<M, N extends AbstractCodec<M>> imp
                 }
                 handleMessage(message);
             } catch (Throwable t) {
-                this.errorHandler(t);
+                log.error("Aeron poll loop failed", t);
             }
         };
 
         this.pollWorker = AeronPollWorker.start(
                 () -> this.subscription.poll(fragmentHandler, properties.getFragmentLimit()),
-                this::errorHandler);
+                (t) -> log.error("Aeron poll loop failed", t));
         log.info("Aeron subscriber ready. channel={}, streamId={}, raftEnabled={}",
                 properties.getChannel(), properties.getStreamId(), properties.isRaftEnabled());
-    }
-
-    protected void errorHandler(Throwable t) {
-        log.error("Aeron poll loop failed", t);
     }
 
     @Override
