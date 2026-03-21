@@ -47,5 +47,10 @@
             <artifactId>aeron-driver</artifactId>
             <version>1.44.6</version>
         </dependency>
+        <dependency>
+            <groupId>com.alipay.sofa</groupId>
+            <artifactId>jraft-core</artifactId>
+            <version>${jraft.version}</version>
+        </dependency>
     </dependencies>
 </project>

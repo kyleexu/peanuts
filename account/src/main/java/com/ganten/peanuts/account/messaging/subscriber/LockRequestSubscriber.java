@@ -4,6 +4,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
 import com.ganten.peanuts.account.messaging.publisher.LockResponsePublisher;
+import com.ganten.peanuts.account.service.AccountLockRaftApplyHandler;
 import com.ganten.peanuts.account.service.AccountService;
 import com.ganten.peanuts.protocol.aeron.AbstractAeronSubscriber;
 import com.ganten.peanuts.protocol.aeron.AeronProperties;
@@ -25,10 +26,20 @@ public class LockRequestSubscriber extends AbstractAeronSubscriber<LockRequestPr
 
     public LockRequestSubscriber(@Qualifier("lockRequestAeronProperties") AeronProperties aeronProperties,
             LockResponsePublisher lockResponsePublisher,
-            AccountService accountService) {
-        super(aeronProperties, LockRequestCodec.getInstance());
+            AccountService accountService,
+            AccountLockRaftApplyHandler accountLockRaftApplyHandler) {
+        super(aeronProperties, LockRequestCodec.getInstance(), accountLockRaftApplyHandler);
         this.accountService = accountService;
         this.lockResponsePublisher = lockResponsePublisher;
+    }
+
+    @Override
+    protected void onRaftRejected(LockRequestProto message, String reason) {
+        LockResponseProto lockResponseProto = new LockResponseProto();
+        lockResponseProto.setRequestId(message.getRequestId());
+        lockResponseProto.setSuccess(false);
+        lockResponseProto.setMessage(reason);
+        lockResponsePublisher.offer(lockResponseProto);
     }
 
     /**
