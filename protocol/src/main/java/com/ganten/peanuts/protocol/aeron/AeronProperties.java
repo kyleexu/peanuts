@@ -32,6 +32,11 @@ public class AeronProperties {
     private String raftInitConf;
 
     /**
+     * 启用 Raft 时业务回调 {@link AbstractAeronSubscriber#onMessage} 的触发方式，见 {@link RaftApplyMode}。
+     */
+    private RaftApplyMode raftApplyMode = RaftApplyMode.AFTER_COMMIT;
+
+    /**
      * 将嵌套在 Aeron 配置中的 Raft 字段转为 {@link RaftProperties}，供 Subscriber 构建 {@code RaftBootstrap}。
      */
     public RaftProperties toRaftProperties() {

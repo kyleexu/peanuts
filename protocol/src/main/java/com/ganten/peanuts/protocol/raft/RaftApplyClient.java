@@ -21,6 +21,10 @@ public class RaftApplyClient {
         this.raftBootstrap = raftBootstrap;
     }
 
+    /**
+     * 将 payload 作为日志条目交给当前 leader 的 Raft 节点；成功仅表示<strong>提案已入队</strong>。
+     * 复制与提交、状态机 {@code onApply} 均为异步，请用 Task 的 Closure 或状态机感知完成与错误。
+     */
     public RaftApplyResult apply(byte[] payload) {
         if (raftBootstrap.getNode() == null) {
             return RaftApplyResult.reject("raft node not ready");
@@ -40,6 +44,7 @@ public class RaftApplyClient {
             }
         });
         raftBootstrap.getNode().apply(task);
+        // 提交到 Raft 队列后即返回；状态机在日志 commit 后异步 apply，与 CodecRaftStateMachine 回调
         return RaftApplyResult.ok();
     }
 }

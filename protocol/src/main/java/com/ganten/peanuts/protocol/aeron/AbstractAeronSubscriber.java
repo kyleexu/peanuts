@@ -14,13 +14,16 @@ import com.ganten.peanuts.protocol.raft.CodecRaftStateMachine;
 import com.ganten.peanuts.protocol.raft.RaftApplyClient;
 import com.ganten.peanuts.protocol.raft.RaftApplyResult;
 import com.ganten.peanuts.protocol.raft.RaftBootstrap;
-import com.ganten.peanuts.protocol.raft.RaftMessageApplyHandler;
 
 import io.aeron.Aeron;
 import io.aeron.Subscription;
 import io.aeron.logbuffer.FragmentHandler;
 import lombok.extern.slf4j.Slf4j;
 
+/**
+ * Aeron 订阅模板；与 Raft 的配合、三种 {@code onMessage} 路径与 {@code RaftApplyResult} 语义见
+ * {@code docs/AERON_AND_RAFT.md}。
+ */
 @Slf4j
 public abstract class AbstractAeronSubscriber<M, N extends AbstractCodec<M>> implements AutoCloseable {
 
@@ -29,9 +32,6 @@ public abstract class AbstractAeronSubscriber<M, N extends AbstractCodec<M>> imp
     protected AeronPollWorker pollWorker;
     protected Aeron aeron;
     protected final N codec;
-    /**
-     * 由 {@link #initRaftFromProperties()} 调用 {@link #createRaftApplyClient()} 创建
-     */
     protected RaftApplyClient raftApplyClient;
 
     public AbstractAeronSubscriber(AeronProperties properties, N codec) {
@@ -48,21 +48,7 @@ public abstract class AbstractAeronSubscriber<M, N extends AbstractCodec<M>> imp
      */
     protected abstract void onMessage(M message);
 
-    /**
-     * Raft 状态机 apply：默认不做业务，仅完成 JRaft 的 {@code done} 回调（日志已由 Raft 层持久化/复制）。
-     */
-    protected void onRaftLogCommitted(M message, boolean localApply, Closure done) {
-        // 如果在这里调用，那么就是速度慢的，但是 raft 一致性可以保证
-        this.onMessage(message);
-        if (localApply && done != null) {
-            done.run(Status.OK());
-        }
-    }
-
     private RaftApplyClient createRaftApplyClient() {
-        if (!properties.isRaftEnabled()) {
-            return null;
-        }
         CodecRaftStateMachine<M, N> fsm = new CodecRaftStateMachine<>(codec, this::onRaftLogCommitted);
         RaftBootstrap bootstrap = new RaftBootstrap(properties.toRaftProperties(), fsm);
         try {
@@ -73,35 +59,39 @@ public abstract class AbstractAeronSubscriber<M, N extends AbstractCodec<M>> imp
         return new RaftApplyClient(bootstrap);
     }
 
-    private void initRaftFromProperties() {
-        try {
-            if (properties != null && properties.isRaftEnabled()) {
-                this.raftApplyClient = createRaftApplyClient();
-            }
-        } catch (Exception e) {
-            log.error("Failed to init Raft client from AeronProperties, streamId={}", properties.getStreamId(), e);
+    /**
+     * 将这个方法传入到了 RaftApplyClient 构造方法内，这个方法会在多数派共识达成后被执行
+     * 这个方式是同步性更好的方案
+     */
+    protected void onRaftLogCommitted(M message, boolean localApply, Closure done) {
+        if (properties.getRaftApplyMode() == RaftApplyMode.AFTER_COMMIT) {
+            this.onMessage(message);
+        }
+        if (localApply && done != null) {
+            done.run(Status.OK());
         }
     }
 
     private void handleMessage(M message) {
-        // 如果在这里调用，那么就是速度快的，但是 raft 一致性没办法保证
-        // this.onMessage(message);
-        if (properties.isRaftEnabled() && raftApplyClient != null) {
-            try {
-                AeronMessage aeronMessage = codec.encode(message);
-                byte[] payload = new byte[aeronMessage.getLength()];
-                aeronMessage.getBuffer().getBytes(0, payload);
-                RaftApplyResult result = raftApplyClient.apply(payload);
-                if (result.isAccepted()) {
-                    log.debug("Raft apply accepted, streamId={}", properties.getStreamId());
-                } else {
-                    log.warn("Raft apply rejected, streamId={}, reason={}", properties.getStreamId(),
-                            result.getReason());
-                }
-            } catch (Throwable t) {
-                log.error("Raft apply failed, streamId={}, reason={}", properties.getStreamId(), t.getMessage());
-            }
-            return;
+        if (!properties.isRaftEnabled()) {
+            onMessage(message);
+        }
+
+        int streamId = properties.getStreamId();
+        RaftApplyMode raftApplyMode = properties.getRaftApplyMode();
+
+        AeronMessage aeronMessage = codec.encode(message);
+        byte[] payload = new byte[aeronMessage.getLength()];
+        aeronMessage.getBuffer().getBytes(0, payload);
+
+        RaftApplyResult result = raftApplyClient.apply(payload);
+        // isAccepted() 是指 leader 侧提案已入队，并不是多数节点复制完成
+        // 处于这种模式下，执行业务逻辑是低延迟方案
+        if (result.isAccepted() && raftApplyMode == RaftApplyMode.ON_AERON_POLL) {
+            this.onMessage(message);
+            log.debug("Raft apply accepted, streamId:{}.", streamId);
+        } else {
+            log.warn("Raft apply rejected, streamId:{}, reason:{}", streamId, result.getReason());
         }
     }
 
@@ -112,11 +102,13 @@ public abstract class AbstractAeronSubscriber<M, N extends AbstractCodec<M>> imp
             return;
         }
 
-        initRaftFromProperties();
-        if (properties.isRaftEnabled() && raftApplyClient == null) {
-            log.error("Raft is enabled but no Raft client was created (override createRaftApplyClient()). streamId={}",
-                    properties.getStreamId());
-            return;
+        if (properties.isRaftEnabled()) {
+            this.raftApplyClient = this.createRaftApplyClient();
+            if (raftApplyClient == null) {
+                log.error("Raft is enabled but have no Raft client. streamId={}",
+                        properties.getStreamId());
+                return;
+            }
         }
 
         if (pollWorker != null) {
@@ -124,6 +116,7 @@ public abstract class AbstractAeronSubscriber<M, N extends AbstractCodec<M>> imp
         }
         aeron = AeronRuntime.connect(properties);
         this.subscription = aeron.addSubscription(properties.getChannel(), properties.getStreamId());
+
         if (this.subscription == null) {
             log.error("Failed to create Aeron subscription");
             return;

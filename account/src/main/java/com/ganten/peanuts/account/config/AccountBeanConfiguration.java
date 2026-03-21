@@ -6,6 +6,7 @@ import org.springframework.context.annotation.Configuration;
 
 import com.ganten.peanuts.common.constant.Constants;
 import com.ganten.peanuts.protocol.aeron.AeronProperties;
+import com.ganten.peanuts.protocol.aeron.RaftApplyMode;
 
 @Configuration
 public class AccountBeanConfiguration {
@@ -28,7 +29,8 @@ public class AccountBeanConfiguration {
             @Value("${account.raft.data-path:${java.io.tmpdir}/peanuts-account-raft}") String raftDataPath,
             @Value("${account.raft.group-id:peanuts-account}") String raftGroupId,
             @Value("${account.raft.server-id:127.0.0.1:8811}") String raftServerId,
-            @Value("${account.raft.init-conf:127.0.0.1:8811}") String raftInitConf) {
+            @Value("${account.raft.init-conf:127.0.0.1:8811}") String raftInitConf,
+            @Value("${account.raft.business-apply-mode:AFTER_COMMIT}") RaftApplyMode raftBusinessApplyMode) {
         AeronProperties properties = new AeronProperties();
         properties.setStreamId(Constants.AERON_STREAM_ID_LOCK_REQUEST);
         properties.setChannel(Constants.AERON_CHANNEL);
@@ -41,6 +43,7 @@ public class AccountBeanConfiguration {
         properties.setRaftGroupId(raftGroupId);
         properties.setRaftServerId(raftServerId);
         properties.setRaftInitConf(raftInitConf);
+        properties.setRaftApplyMode(raftBusinessApplyMode);
         return properties;
     }
 

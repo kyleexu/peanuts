@@ -7,3 +7,6 @@ account:
     channel: aeron:ipc
     lock-request-stream-id: 2101
     lock-response-stream-id: 2102
+  # raft:
+  #   business-apply-mode: AFTER_COMMIT   # 状态机提交后调 onMessage（默认）
+  #   business-apply-mode: ON_AERON_POLL  # apply 成功后立即在 Aeron 线程调 onMessage
