@@ -14,6 +14,7 @@
         <module>order</module>
         <module>test</module>
         <module>monitor</module>
+        <module>sync</module>
     </modules>
 
     <artifactId>peanuts</artifactId>
