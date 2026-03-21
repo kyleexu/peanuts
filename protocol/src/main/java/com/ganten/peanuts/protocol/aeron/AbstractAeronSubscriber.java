@@ -6,6 +6,7 @@ import javax.annotation.PostConstruct;
 
 import org.agrona.DirectBuffer;
 
+import com.alipay.sofa.jraft.Status;
 import com.ganten.peanuts.protocol.codec.AbstractCodec;
 import com.ganten.peanuts.protocol.model.AeronMessage;
 import com.ganten.peanuts.protocol.raft.CodecRaftStateMachine;
@@ -23,8 +24,12 @@ import lombok.extern.slf4j.Slf4j;
  * Aeron Subscriber template:
  * - 负责启动/停止 poll loop
  * - 负责在 FragmentHandler 中 decode -> onMessage
- * - 可选：若 {@link AeronProperties#isRaftEnabled()} 为 true，子类实现 {@link #raftMessageApplyHandler()}，
- * 基类用 {@link AeronProperties#toRaftProperties()} 装配 Raft，在消费时先 propose；亦可覆盖 {@link #createRaftApplyClient()}
+ * - 可选：若 {@link AeronProperties#isRaftEnabled()} 为 true，状态机默认回调
+ * {@link #onRaftCommitted}，
+ * 其默认仅在 {@code localApply} 时调用 {@link #onMessage}；多副本且跟随者需执行相同逻辑时请覆盖
+ * {@link #onRaftCommitted}。
+ * 亦可覆盖 {@link #raftMessageApplyHandler()} 或 {@link #createRaftApplyClient()}
+ * 完全自定义。
  */
 @Slf4j
 public abstract class AbstractAeronSubscriber<M, N extends AbstractCodec<M>> implements AutoCloseable {
@@ -34,7 +39,9 @@ public abstract class AbstractAeronSubscriber<M, N extends AbstractCodec<M>> imp
     protected AeronPollWorker pollWorker;
     protected Aeron aeron;
     protected final N codec;
-    /** 由 {@link #initRaftFromProperties()} 调用 {@link #createRaftApplyClient()} 创建 */
+    /**
+     * 由 {@link #initRaftFromProperties()} 调用 {@link #createRaftApplyClient()} 创建
+     */
     protected RaftApplyClient raftApplyClient;
 
     public AbstractAeronSubscriber(AeronProperties properties, N codec) {
@@ -49,16 +56,22 @@ public abstract class AbstractAeronSubscriber<M, N extends AbstractCodec<M>> imp
     protected abstract void onMessage(M message);
 
     /**
-     * 需要本流走 Raft 时在子类中实现并返回非 null；
-     * 默认 null 表示仅 Aeron、不走 Raft（此时请勿将 {@link AeronProperties#isRaftEnabled()} 
-     * 设为 true）。
+     * 非空时优先于 {@link #onRaftCommitted} 作为状态机 handler（完全自定义装配时用）。
      */
     protected RaftMessageApplyHandler<M> raftMessageApplyHandler() {
-        return null;
+        return (message, localApply, done) -> {
+            if (localApply) {
+                onMessage(message);
+                if (done != null) {
+                    done.run(Status.OK());
+                }
+            }
+        };
     }
 
     /**
-     * 当 {@link AeronProperties#isRaftEnabled()} 为 true 时由 {@link #initRaftFromProperties()} 调用；默认用
+     * 当 {@link AeronProperties#isRaftEnabled()} 为 true 时由
+     * {@link #initRaftFromProperties()} 调用；默认用
      * {@link CodecRaftStateMachine} + {@link RaftBootstrap} 装配，子类可覆盖。
      */
     protected RaftApplyClient createRaftApplyClient() {
@@ -66,10 +79,6 @@ public abstract class AbstractAeronSubscriber<M, N extends AbstractCodec<M>> imp
             return null;
         }
         RaftMessageApplyHandler<M> handler = raftMessageApplyHandler();
-        if (handler == null) {
-            log.warn("Raft enabled but raftMessageApplyHandler() returned null, streamId={}", properties.getStreamId());
-            return null;
-        }
         CodecRaftStateMachine<M, N> fsm = new CodecRaftStateMachine<>(codec, handler);
         RaftBootstrap bootstrap = new RaftBootstrap(properties.toRaftProperties(), fsm);
         try {
@@ -81,28 +90,15 @@ public abstract class AbstractAeronSubscriber<M, N extends AbstractCodec<M>> imp
     }
 
     /**
-     * 是否走 Raft 路径：以是否成功创建 {@link #raftApplyClient} 为准（配置开启但无 handler / 启动失败则不会为 true）。
+     * 是否走 Raft 路径：以是否成功创建 {@link #raftApplyClient} 为准（配置开启但无 handler / 启动失败则不会为
+     * true）。
      */
     protected boolean useRaft() {
         return raftApplyClient != null;
     }
 
-    /**
-     * 统一收集（与业务 Raft 解耦，仅日志）。
-     */
-    protected void collectRaftData(M message) {
-        if (message == null) {
-            return;
-        }
-        String payload = String.valueOf(message);
-        if (payload.length() > 1024) {
-            payload = payload.substring(0, 1024) + "...(truncated)";
-        }
-        log.info("[raft-collect] channel={} streamId={} type={} payload={}",
-                properties.getChannel(),
-                properties.getStreamId(),
-                message.getClass().getSimpleName(),
-                payload);
+    protected boolean shouldApplyRaftWhenLocal() {
+        return properties.isRaftEnabled() && useRaft();
     }
 
     protected void onRaftAccepted(M message) {
@@ -125,7 +121,6 @@ public abstract class AbstractAeronSubscriber<M, N extends AbstractCodec<M>> imp
     }
 
     private void handleMessage(M message) {
-        collectRaftData(message);
         if (useRaft()) {
             if (raftApplyClient == null) {
                 onRaftRejected(message, "raft client not initialized");
@@ -158,8 +153,7 @@ public abstract class AbstractAeronSubscriber<M, N extends AbstractCodec<M>> imp
 
         initRaftFromProperties();
         if (properties.isRaftEnabled() && raftApplyClient == null) {
-            log.error(
-                    "Raft is enabled but no Raft client was created (override raftMessageApplyHandler() or createRaftApplyClient()). streamId={}",
+            log.error("Raft is enabled but no Raft client was created (override createRaftApplyClient()). streamId={}",
                     properties.getStreamId());
             return;
         }

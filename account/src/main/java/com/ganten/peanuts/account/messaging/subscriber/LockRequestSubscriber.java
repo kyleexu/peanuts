@@ -3,8 +3,9 @@ package com.ganten.peanuts.account.messaging.subscriber;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
+import com.alipay.sofa.jraft.Closure;
+import com.alipay.sofa.jraft.Status;
 import com.ganten.peanuts.account.messaging.publisher.LockResponsePublisher;
-import com.ganten.peanuts.account.service.AccountLockRaftApplyHandler;
 import com.ganten.peanuts.account.service.AccountService;
 import com.ganten.peanuts.protocol.aeron.AbstractAeronSubscriber;
 import com.ganten.peanuts.protocol.aeron.AeronProperties;
@@ -16,6 +17,10 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * Aeron: account -> order
+ * <p>
+ * {@code account.raft.enabled=false}：仅 Aeron，走 {@link #onMessage}。<br>
+ * {@code account.raft.enabled=true}：propose 后由 {@link #onRaftCommitted} 与
+ * {@link #onMessage} 共用 {@link #applyLockRequest}（跟随者仅锁、不回包）。
  */
 @Slf4j
 @Component
@@ -26,9 +31,8 @@ public class LockRequestSubscriber extends AbstractAeronSubscriber<LockRequestPr
 
     public LockRequestSubscriber(@Qualifier("lockRequestAeronProperties") AeronProperties aeronProperties,
             LockResponsePublisher lockResponsePublisher,
-            AccountService accountService,
-            AccountLockRaftApplyHandler accountLockRaftApplyHandler) {
-        super(aeronProperties, LockRequestCodec.getInstance(), accountLockRaftApplyHandler);
+            AccountService accountService) {
+        super(aeronProperties, LockRequestCodec.getInstance());
         this.accountService = accountService;
         this.lockResponsePublisher = lockResponsePublisher;
     }
@@ -42,10 +46,6 @@ public class LockRequestSubscriber extends AbstractAeronSubscriber<LockRequestPr
         lockResponsePublisher.offer(lockResponseProto);
     }
 
-    /**
-     * 第 4 步，消费锁请求，并返回锁响应
-     * 关键: 在消费完锁请求之后，需要调用 LockResponsePublisher 发布锁响应
-     */
     @Override
     protected void onMessage(LockRequestProto message) {
         boolean success = accountService.tryLock(message.getUserId(), message.getCurrency(), message.getAmount());
