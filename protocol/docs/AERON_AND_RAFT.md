@@ -84,26 +84,20 @@
 
 ---
 
-## 7. 配置参考（Spring / YAML）
+## 7. 配置参考
 
-与 `AeronProperties` 相关的 Raft 字段（具体前缀以各模块 `@Bean` 为准，例如 account 的 `lockRequestAeronProperties`）：
+各模块 Subscriber 的 `AeronProperties` 由 **`com.ganten.peanuts.protocol.aeron.AeronSubscriberPropertiesFactory`** 从 **`com.ganten.peanuts.common.constant.Constants`** 组装：
 
-| 配置项 | 说明 |
-|--------|------|
+- **`standardSubscriber(streamId, fragmentLimit, launchEmbeddedDriver)`**：通用订阅；`AERON_SUBSCRIBER_RAFT_ENABLED` 为 true 时，按 `streamId` 设置独立 `raftDataPath` / `raftGroupId` / `raftServerId`（端口 `7000 + streamId`）/ `raftInitConf`（单节点），避免同 JVM 多 Subscriber 端口与目录冲突。
+- **`accountLockRequestSubscriber()`**：与标准订阅相同 Raft 布局（stream `2101`），仅 `raftApplyMode` 使用 **`ACCOUNT_RAFT_APPLY_MODE_NAME`**。
+
+不通过 Spring YAML/properties 注入；仅 **`application.yml` 中 `server.port`** 等与本机制无关项可保留。
+
+| 字段 | 说明 |
+|------|------|
 | `raftEnabled` | 是否启用 Raft 客户端与 `apply` 路径。 |
 | `raftDataPath` / `groupId` / `serverId` / `initConf` | Raft 节点与集群参数，见 `RaftBootstrap`。 |
-| `raftApplyMode` | `AFTER_COMMIT`（默认）或 `ON_AERON_POLL`，见第 2 节。 |
-
-示例（account 模块常见写法）：
-
-```yaml
-account:
-  raft:
-    enabled: true
-    business-apply-mode: AFTER_COMMIT   # 或 ON_AERON_POLL（与 Java 枚举名一致时可用）
-```
-
-绑定字段名以 **`AeronProperties#setRaftApplyMode`** 及 `@Value` 的 property 名为准。
+| `raftApplyMode` | 通用订阅用常量 `AERON_SUBSCRIBER_RAFT_APPLY_MODE_NAME`；account 锁请求用 `ACCOUNT_RAFT_APPLY_MODE_NAME`，见第 2 节。 |
 
 ---
 
@@ -112,6 +106,7 @@ account:
 | 类 | 作用 |
 |----|------|
 | `AbstractAeronSubscriber` | Aeron poll、`handleMessage`、`onMessage`、`onRaftLogCommitted`。 |
+| `AeronSubscriberPropertiesFactory` | 从 `Constants` 构造各模块 Subscriber 的 `AeronProperties`。 |
 | `AeronProperties` | Aeron + Raft 开关与 `RaftApplyMode`。 |
 | `RaftApplyMode` | `AFTER_COMMIT` / `ON_AERON_POLL`。 |
 | `RaftApplyClient` | 封装 `Node#apply`，返回 `RaftApplyResult`。 |
@@ -123,8 +118,8 @@ account:
 
 ## 9. FAQ
 
-**Q：`handleMessage` 里最后一行 `onMessage` 和 Raft 路径会重复吗？**  
-A：不会。启用 Raft且 `raftApplyClient != null` 时，前面 `return`，**不会**执行最后的 `onMessage`；该 `onMessage` 仅用于 **未启用 Raft**。
+**Q：未开 Raft 与开 Raft 会重复调 `onMessage` 吗？**  
+A：不会。`raftEnabled == false` 时只在 `handleMessage` 开头调用一次 `onMessage` 并 `return`；开 Raft 时走 `apply` 与模式分支。
 
 **Q：Raft 日志已经持久化了，为什么还要在状态机里写业务？**  
 A：Raft 持久的是 **命令字节流**；是否在状态机里更新内存/发副作用，由产品决定。本框架通过 **`RaftApplyMode`** 决定 **`onMessage`** 在「提交后」还是「apply 返回后」触发。

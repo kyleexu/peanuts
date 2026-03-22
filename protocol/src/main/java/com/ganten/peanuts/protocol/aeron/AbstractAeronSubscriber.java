@@ -21,8 +21,8 @@ import io.aeron.logbuffer.FragmentHandler;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Aeron 订阅模板；与 Raft 的配合、三种 {@code onMessage} 路径与 {@code RaftApplyResult} 语义见
- * {@code docs/AERON_AND_RAFT.md}。
+ * Aeron 订阅模板；各模块 {@link AeronProperties} 由 {@link AeronSubscriberPropertiesFactory} 从
+ * {@link com.ganten.peanuts.common.constant.Constants} 组装。行为说明见 {@code docs/AERON_AND_RAFT.md}。
  */
 @Slf4j
 public abstract class AbstractAeronSubscriber<M, N extends AbstractCodec<M>> implements AutoCloseable {
@@ -75,6 +75,7 @@ public abstract class AbstractAeronSubscriber<M, N extends AbstractCodec<M>> imp
     private void handleMessage(M message) {
         if (!properties.isRaftEnabled()) {
             onMessage(message);
+            return;
         }
 
         int streamId = properties.getStreamId();
