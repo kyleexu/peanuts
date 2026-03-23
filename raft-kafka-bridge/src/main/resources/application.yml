@@ -1,0 +1,42 @@
+spring:
+  main:
+    web-application-type: none
+
+raft-kafka-bridge:
+  kafka:
+    bootstrapServers: localhost:9092
+  streams:
+    # trade: 2003
+    - streamId: 2003
+      topic: peanuts-trade
+      raft:
+        # 可根据你的部署自行指定每个 stream 的数据目录、serverId 与 initConf
+        dataPath: /tmp/peanuts-raft/bridge/stream-2003
+        groupId: peanuts-stream-2003
+        serverId: 127.0.0.1:7003
+        initConf: 127.0.0.1:7003
+    # orderBook: 2004
+    - streamId: 2004
+      topic: peanuts-order-book
+      raft:
+        dataPath: /tmp/peanuts-raft/bridge/stream-2004
+        groupId: peanuts-stream-2004
+        serverId: 127.0.0.1:7004
+        initConf: 127.0.0.1:7004
+    # executionReport: 2002
+    - streamId: 2002
+      topic: peanuts-execution-report
+      raft:
+        dataPath: /tmp/peanuts-raft/bridge/stream-2002
+        groupId: peanuts-stream-2002
+        serverId: 127.0.0.1:7002
+        initConf: 127.0.0.1:7002
+    # lockResponse: 2102
+    - streamId: 2102
+      topic: peanuts-lock-response
+      raft:
+        dataPath: /tmp/peanuts-raft/bridge/stream-2102
+        groupId: peanuts-stream-2102
+        serverId: 127.0.0.1:7102
+        initConf: 127.0.0.1:7102
+
