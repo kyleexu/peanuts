@@ -2,40 +2,39 @@ package com.ganten.peanuts.bridge.raft;
 
 import java.util.function.Function;
 
-import com.alipay.sofa.jraft.Closure;
-import com.alipay.sofa.jraft.Status;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.SendResult;
 import org.springframework.util.concurrent.ListenableFutureCallback;
+
+import com.alipay.sofa.jraft.Closure;
+import com.alipay.sofa.jraft.Status;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ganten.peanuts.protocol.raft.RaftMessageApplyHandler;
+
+
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Raft 状态机提交回调：将 committed 的业务消息写入 Kafka。
  *
  * <p>该 module 以“监听”为主，不负责向 raft 投递（不调用 Node#apply）。因此默认不阻塞 Raft 线程。</p>
  */
-@SuppressWarnings({ "rawtypes", "unchecked" })
-public class RaftKafkaMessageApplyHandler implements RaftMessageApplyHandler<Object> {
-
-    private static final Logger log = LoggerFactory.getLogger(RaftKafkaMessageApplyHandler.class);
+@Slf4j
+public class RaftKafkaMessageApplyHandler<T> implements RaftMessageApplyHandler<T> {
 
     private final int streamId;
     private final String topic;
     private final KafkaTemplate<String, String> kafkaTemplate;
     private final ObjectMapper objectMapper;
-    private final Function<Object, String> keyExtractor;
+    private final Function<T, String> keyExtractor;
 
     public RaftKafkaMessageApplyHandler(
             int streamId,
             String topic,
             KafkaTemplate<String, String> kafkaTemplate,
             ObjectMapper objectMapper,
-            Function<Object, String> keyExtractor) {
+            Function<T, String> keyExtractor) {
         this.streamId = streamId;
         this.topic = topic;
         this.kafkaTemplate = kafkaTemplate;
@@ -44,7 +43,8 @@ public class RaftKafkaMessageApplyHandler implements RaftMessageApplyHandler<Obj
     }
 
     @Override
-    public void onCommitted(Object message, boolean localApply, Closure done) {
+    public void onCommitted(T message, boolean localApply, Closure done) {
+        // 消息为空的时候，退出
         if (message == null) {
             if (localApply && done != null) {
                 done.run(Status.OK());

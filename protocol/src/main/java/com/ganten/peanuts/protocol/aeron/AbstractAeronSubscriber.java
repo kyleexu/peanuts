@@ -48,6 +48,10 @@ public abstract class AbstractAeronSubscriber<M, N extends AbstractCodec<M>> imp
      */
     protected abstract void onMessage(M message);
 
+    /**
+     * @see RaftMessageApplyHandler#onCommitted
+     * @return
+     */
     private RaftApplyClient createRaftApplyClient() {
         CodecRaftStateMachine<M, N> fsm = new CodecRaftStateMachine<>(codec, this::onRaftLogCommitted);
         RaftBootstrap bootstrap = new RaftBootstrap(properties.toRaftProperties(), fsm);

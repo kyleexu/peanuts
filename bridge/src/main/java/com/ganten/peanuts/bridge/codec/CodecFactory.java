@@ -19,7 +19,7 @@ public final class CodecFactory {
     private CodecFactory() {
     }
 
-    public static CodecSpec specForStreamId(int streamId) {
+    public static CodecSpec<?> specForStreamId(int streamId) {
         switch (streamId) {
             case 2003:
                 return trade();
@@ -36,54 +36,54 @@ public final class CodecFactory {
         }
     }
 
-    private static CodecSpec trade() {
-        AbstractCodec codec = TradeCodec.getInstance();
-        Function<Object, String> keyExtractor = message -> String.valueOf(((TradeProto) message).getTradeId());
-        return new CodecSpec(codec, keyExtractor);
+    private static CodecSpec<TradeProto> trade() {
+        AbstractCodec<TradeProto> codec = TradeCodec.getInstance();
+        Function<TradeProto, String> keyExtractor = message -> String.valueOf(((TradeProto) message).getTradeId());
+        return new CodecSpec<TradeProto>(codec, keyExtractor);
     }
 
-    private static CodecSpec orderBook() {
-        AbstractCodec codec = OrderBookCodec.getInstance();
-        Function<Object, String> keyExtractor = message -> {
+    private static CodecSpec<OrderBookProto> orderBook() {
+        AbstractCodec<OrderBookProto> codec = OrderBookCodec.getInstance();
+        Function<OrderBookProto, String> keyExtractor = message -> {
             OrderBookProto snap = (OrderBookProto) message;
             String contract = snap.getContract() == null ? "null" : snap.getContract().name();
             return contract + "-" + snap.getTimestamp();
         };
-        return new CodecSpec(codec, keyExtractor);
+        return new CodecSpec<>(codec, keyExtractor);
     }
 
-    private static CodecSpec executionReport() {
-        AbstractCodec codec = ExecutionReportCodec.getInstance();
-        Function<Object, String> keyExtractor = message -> String.valueOf(((ExecutionReportProto) message).getOrderId());
-        return new CodecSpec(codec, keyExtractor);
+    private static CodecSpec<ExecutionReportProto> executionReport() {
+        AbstractCodec<ExecutionReportProto> codec = ExecutionReportCodec.getInstance();
+        Function<ExecutionReportProto, String> keyExtractor = message -> String.valueOf(((ExecutionReportProto) message).getOrderId());
+        return new CodecSpec<>(codec, keyExtractor);
     }
 
-    private static CodecSpec lockResponse() {
-        AbstractCodec codec = LockResponseCodec.getInstance();
-        Function<Object, String> keyExtractor = message -> String.valueOf(((LockResponseProto) message).getRequestId());
-        return new CodecSpec(codec, keyExtractor);
+    private static CodecSpec<LockResponseProto> lockResponse() {
+        AbstractCodec<LockResponseProto> codec = LockResponseCodec.getInstance();
+        Function<LockResponseProto, String> keyExtractor = message -> String.valueOf(((LockResponseProto) message).getRequestId());
+        return new CodecSpec<>(codec, keyExtractor);
     }
 
-    private static CodecSpec order() {
-        AbstractCodec codec = OrderCodec.getInstance();
-        Function<Object, String> keyExtractor = message -> String.valueOf(((OrderProto) message).getOrderId());
-        return new CodecSpec(codec, keyExtractor);
+    private static CodecSpec<OrderProto> order() {
+        AbstractCodec<OrderProto> codec = OrderCodec.getInstance();
+        Function<OrderProto, String> keyExtractor = message -> String.valueOf(((OrderProto) message).getOrderId());
+        return new CodecSpec<OrderProto>(codec, keyExtractor);
     }
 
-    public static final class CodecSpec {
-        private final AbstractCodec codec;
-        private final Function<Object, String> keyExtractor;
+    public static final class CodecSpec<T> {
+        private final AbstractCodec<T> codec;
+        private final Function<T, String> keyExtractor;
 
-        private CodecSpec(AbstractCodec codec, Function<Object, String> keyExtractor) {
+        private CodecSpec(AbstractCodec<T> codec, Function<T, String> keyExtractor) {
             this.codec = codec;
             this.keyExtractor = keyExtractor;
         }
 
-        public AbstractCodec getCodec() {
+        public AbstractCodec<T> getCodec() {
             return codec;
         }
 
-        public Function<Object, String> getKeyExtractor() {
+        public Function<T, String> getKeyExtractor() {
             return keyExtractor;
         }
     }

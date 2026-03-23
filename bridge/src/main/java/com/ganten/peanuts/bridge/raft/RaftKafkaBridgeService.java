@@ -4,26 +4,27 @@ import java.io.IOException;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-import com.ganten.peanuts.bridge.config.RaftKafkaBridgeProperties;
-import com.ganten.peanuts.bridge.codec.CodecFactory;
-import com.ganten.peanuts.bridge.codec.CodecFactory.CodecSpec;
-import com.ganten.peanuts.protocol.raft.CodecRaftStateMachine;
-import com.ganten.peanuts.protocol.raft.RaftBootstrap;
-import com.ganten.peanuts.protocol.raft.RaftProperties;
+import javax.annotation.PostConstruct;
+import javax.annotation.PreDestroy;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 
-import javax.annotation.PostConstruct;
-import javax.annotation.PreDestroy;
-
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ganten.peanuts.bridge.codec.CodecFactory;
+import com.ganten.peanuts.bridge.codec.CodecFactory.CodecSpec;
+import com.ganten.peanuts.bridge.config.RaftKafkaBridgeProperties;
+import com.ganten.peanuts.protocol.raft.CodecRaftStateMachine;
+import com.ganten.peanuts.protocol.raft.RaftBootstrap;
+import com.ganten.peanuts.protocol.raft.RaftProperties;
 
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j
 @Service
 public class RaftKafkaBridgeService {
-
-    private static final Logger log = LoggerFactory.getLogger(RaftKafkaBridgeService.class);
 
     private final RaftKafkaBridgeProperties properties;
     private final KafkaTemplate<String, String> kafkaTemplate;
@@ -49,7 +50,7 @@ public class RaftKafkaBridgeService {
         for (RaftKafkaBridgeProperties.StreamConfig s : properties.getStreams()) {
             int streamId = s.getStreamId();
             String topic = s.getTopic();
-            CodecSpec spec = CodecFactory.specForStreamId(streamId);
+            CodecSpec<?> spec = CodecFactory.specForStreamId(streamId);
 
             RaftProperties rp = new RaftProperties();
             rp.setDataPath(s.getRaft().getDataPath());
@@ -58,7 +59,7 @@ public class RaftKafkaBridgeService {
             rp.setInitConf(s.getRaft().getInitConf());
             // listener_only: 不需要通过 raftApplyMode 控制业务 onMessage（本 module 只写 Kafka）。
 
-            RaftKafkaMessageApplyHandler applyHandler = new RaftKafkaMessageApplyHandler(
+            RaftKafkaMessageApplyHandler<?> applyHandler = new RaftKafkaMessageApplyHandler<>(
                     streamId,
                     topic,
                     kafkaTemplate,
