@@ -25,7 +25,6 @@ public class AeronProperties {
     private int fragmentLimit = 50;
 
     // Raft properties (used by subscribers)
-    private boolean raftEnabled = false;
     private String raftDataPath;
     private String raftGroupId;
     private String raftServerId;
@@ -41,7 +40,7 @@ public class AeronProperties {
      */
     public RaftProperties toRaftProperties() {
         RaftProperties rp = new RaftProperties();
-        rp.setEnabled(raftEnabled);
+        rp.setRaftApplyMode(raftApplyMode);
         rp.setDataPath(raftDataPath);
         rp.setGroupId(raftGroupId);
         rp.setServerId(raftServerId);

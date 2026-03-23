@@ -1,5 +1,7 @@
 package com.ganten.peanuts.protocol.raft;
 
+import com.ganten.peanuts.protocol.aeron.RaftApplyMode;
+
 import lombok.Data;
 
 /**
@@ -7,10 +9,9 @@ import lombok.Data;
  */
 @Data
 public class RaftProperties {
-
-    private boolean enabled = false;
     private String dataPath;
     private String groupId;
     private String serverId;
     private String initConf;
+    private RaftApplyMode raftApplyMode;
 }

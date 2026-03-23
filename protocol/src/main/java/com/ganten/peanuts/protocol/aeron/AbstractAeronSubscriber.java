@@ -73,8 +73,8 @@ public abstract class AbstractAeronSubscriber<M, N extends AbstractCodec<M>> imp
     }
 
     private void handleMessage(M message) {
-        if (!properties.isRaftEnabled()) {
-            onMessage(message);
+        if (properties.getRaftApplyMode() == RaftApplyMode.DISABLE) {
+            this.onMessage(message);
             return;
         }
 
@@ -103,7 +103,7 @@ public abstract class AbstractAeronSubscriber<M, N extends AbstractCodec<M>> imp
             return;
         }
 
-        if (properties.isRaftEnabled()) {
+        if (properties.getRaftApplyMode() != RaftApplyMode.DISABLE) {
             this.raftApplyClient = this.createRaftApplyClient();
             if (raftApplyClient == null) {
                 log.error("Raft is enabled but have no Raft client. streamId={}",
@@ -129,7 +129,7 @@ public abstract class AbstractAeronSubscriber<M, N extends AbstractCodec<M>> imp
                 if (message == null) {
                     return;
                 }
-                handleMessage(message);
+                this.handleMessage(message);
             } catch (Throwable t) {
                 log.error("Aeron poll loop failed", t);
             }
@@ -138,8 +138,8 @@ public abstract class AbstractAeronSubscriber<M, N extends AbstractCodec<M>> imp
         this.pollWorker = AeronPollWorker.start(
                 () -> this.subscription.poll(fragmentHandler, properties.getFragmentLimit()),
                 (t) -> log.error("Aeron poll loop failed", t));
-        log.info("Aeron subscriber ready. channel={}, streamId={}, raftEnabled={}",
-                properties.getChannel(), properties.getStreamId(), properties.isRaftEnabled());
+        log.info("Aeron subscriber ready. channel={}, streamId={}, raftApplyMode={}",
+                properties.getChannel(), properties.getStreamId(), properties.getRaftApplyMode());
     }
 
     @Override

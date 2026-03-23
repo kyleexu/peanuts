@@ -8,6 +8,8 @@ package com.ganten.peanuts.protocol.aeron;
  */
 public enum RaftApplyMode {
 
+    DISABLE,
+
     /**
      * 在状态机 {@code onRaftLogCommitted} 里调用（日志已提交、即将 apply 时），与 Raft 日志顺序一致，延迟更高。
      */

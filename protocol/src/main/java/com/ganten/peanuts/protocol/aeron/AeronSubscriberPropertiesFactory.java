@@ -22,7 +22,6 @@ public final class AeronSubscriberPropertiesFactory {
         p.setLaunchEmbeddedDriver(launchEmbeddedDriver);
         p.setDirectory(Constants.AERON_DIRECTORY);
         p.setFragmentLimit(fragmentLimit);
-        p.setRaftEnabled(Constants.AERON_SUBSCRIBER_RAFT_ENABLED);
         if (Constants.AERON_SUBSCRIBER_RAFT_ENABLED) {
             p.setRaftDataPath(Constants.subscriberRaftDataPath(streamId));
             p.setRaftGroupId(Constants.subscriberRaftGroupId(streamId));

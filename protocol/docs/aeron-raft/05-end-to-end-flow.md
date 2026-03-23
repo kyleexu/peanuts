@@ -25,7 +25,7 @@ flowchart LR
 ```mermaid
 flowchart TD
   W["AeronPollWorker 循环<br/>调用 subscription.poll"]
-  Po["subscription.poll(fragmentHandler, fragmentLimit)"]
+  Po["subscription.poll"]
   FH["FragmentHandler 回调<br/>(buffer, offset, length, header)"]
   Dec["decode(buffer, offset) → 业务对象 M"]
   H["handleMessage(M)"]
