@@ -2,7 +2,7 @@ spring:
   main:
     web-application-type: none
 
-raft-kafka-bridge:
+bridge:
   kafka:
     bootstrapServers: localhost:9092
   streams:

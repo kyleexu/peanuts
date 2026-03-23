@@ -14,7 +14,7 @@
         <module>test</module>
         <module>monitor</module>
         <module>sync</module>
-        <module>raft-kafka-bridge</module>
+        <module>bridge</module>
         <module>raft-poc</module>
     </modules>
 

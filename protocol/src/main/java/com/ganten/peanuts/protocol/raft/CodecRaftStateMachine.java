@@ -29,8 +29,8 @@ public class CodecRaftStateMachine<M, C extends AbstractCodec<M>> extends StateM
             byte[] bytes = new byte[data.remaining()];
             data.get(bytes);
             M message = codec.decode(new UnsafeBuffer(bytes), 0);
-            boolean localApply = iter.done() != null;
-            Closure done = localApply ? iter.done() : null;
+            Closure done = iter.done();
+            boolean localApply = (done != null);
             applyHandler.onCommitted(message, localApply, done);
             iter.next();
         }

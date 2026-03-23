@@ -5,7 +5,7 @@ import java.util.List;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
-@ConfigurationProperties(prefix = "raft-kafka-bridge")
+@ConfigurationProperties(prefix = "bridge")
 public class RaftKafkaBridgeProperties {
 
     private Kafka kafka = new Kafka();
