@@ -2,16 +2,16 @@ package com.ganten.peanuts.protocol.raft;
 
 import java.nio.ByteBuffer;
 
-import com.alipay.sofa.jraft.Closure;
-import com.alipay.sofa.jraft.Status;
 import com.alipay.sofa.jraft.entity.PeerId;
 import com.alipay.sofa.jraft.entity.Task;
 
 import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * 通用提案客户端：仅 leader 接受 apply。
  */
+@Slf4j
 public class RaftApplyClient {
 
     @Getter
@@ -37,12 +37,8 @@ public class RaftApplyClient {
 
         Task task = new Task();
         task.setData(ByteBuffer.wrap(payload));
-        task.setDone(new Closure() {
-            @Override
-            public void run(Status status) {
-                // 业务处理由状态机 handler 负责。
-            }
-        });
+        // 达成共识之后，会调用 done 里面的方式
+        task.setDone(status -> log.info("raft apply callback status={}", status));
         raftBootstrap.getNode().apply(task);
         // 提交到 Raft 队列后即返回；状态机在日志 commit 后异步 apply，与 CodecRaftStateMachine 回调
         return RaftApplyResult.ok();

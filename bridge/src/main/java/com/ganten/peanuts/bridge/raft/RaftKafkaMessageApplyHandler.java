@@ -12,13 +12,14 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ganten.peanuts.protocol.raft.RaftMessageApplyHandler;
 
-
 import lombok.extern.slf4j.Slf4j;
 
 /**
  * Raft 状态机提交回调：将 committed 的业务消息写入 Kafka。
  *
- * <p>该 module 以“监听”为主，不负责向 raft 投递（不调用 Node#apply）。因此默认不阻塞 Raft 线程。</p>
+ * <p>
+ * 该 module 以“监听”为主，不负责向 raft 投递（不调用 Node#apply）。因此默认不阻塞 Raft 线程。
+ * </p>
  */
 @Slf4j
 public class RaftKafkaMessageApplyHandler<T> implements RaftMessageApplyHandler<T> {
@@ -51,47 +52,25 @@ public class RaftKafkaMessageApplyHandler<T> implements RaftMessageApplyHandler<
             }
             return;
         }
-
-        final String key = keyExtractor == null ? null : keyExtractor.apply(message);
+        
         final String json;
         try {
             json = objectMapper.writeValueAsString(message);
         } catch (JsonProcessingException e) {
             log.error("Failed to serialize raft message to json, streamId={}, topic={}", streamId, topic, e);
+            // 如果失败了，如果是本地节点，那么完成这个 raft 消息
             if (localApply && done != null) {
                 done.run(Status.OK());
             }
             return;
         }
 
-        try {
-            if (key == null) {
-                kafkaTemplate.send(topic, json).addCallback(new ListenableFutureCallback<SendResult<String, String>>() {
-                    @Override
-                    public void onFailure(Throwable ex) {
-                        log.error("Kafka send failed, streamId={}, topic={}", streamId, topic, ex);
-                    }
-
-                    @Override
-                    public void onSuccess(SendResult<String, String> result) {
-                        // fire-and-forget
-                    }
-                });
-            } else {
-                kafkaTemplate.send(topic, key, json).addCallback(new ListenableFutureCallback<SendResult<String, String>>() {
-                    @Override
-                    public void onFailure(Throwable ex) {
-                        log.error("Kafka send failed, streamId={}, topic={}", streamId, topic, ex);
-                    }
-
-                    @Override
-                    public void onSuccess(SendResult<String, String> result) {
-                        // fire-and-forget
-                    }
-                });
-            }
-        } catch (Throwable t) {
-            log.error("Kafka send throw, streamId={}, topic={}", streamId, topic, t);
+        // 发送 kafka 消息
+        final String key = keyExtractor == null ? null : keyExtractor.apply(message);
+        if (key == null) {
+            kafkaTemplate.send(topic, json);
+        } else {
+            kafkaTemplate.send(topic, key, json);
         }
 
         if (localApply && done != null) {
@@ -99,10 +78,4 @@ public class RaftKafkaMessageApplyHandler<T> implements RaftMessageApplyHandler<
             done.run(Status.OK());
         }
     }
-
-    // kept for possible future customization (e.g. localApply should succeed only when kafka send success)
-    public interface KafkaSendErrorHandler {
-        void onSendError(int streamId, String topic, Throwable ex);
-    }
 }
-
