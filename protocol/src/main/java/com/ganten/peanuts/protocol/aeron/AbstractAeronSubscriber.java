@@ -11,9 +11,9 @@ import com.alipay.sofa.jraft.Status;
 import com.ganten.peanuts.protocol.codec.AbstractCodec;
 import com.ganten.peanuts.protocol.model.AeronMessage;
 import com.ganten.peanuts.protocol.raft.CodecRaftStateMachine;
-import com.ganten.peanuts.protocol.raft.RaftApplyClient;
-import com.ganten.peanuts.protocol.raft.RaftApplyResult;
 import com.ganten.peanuts.protocol.raft.RaftBootstrap;
+import com.ganten.peanuts.protocol.raft.RaftBootstrap.ApplyResult;
+import com.ganten.peanuts.protocol.raft.RaftMessageApplyHandler;
 
 import io.aeron.Aeron;
 import io.aeron.Subscription;
@@ -21,8 +21,10 @@ import io.aeron.logbuffer.FragmentHandler;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Aeron 订阅模板；各模块 {@link AeronProperties} 由 {@link AeronSubscriberPropertiesFactory} 从
- * {@link com.ganten.peanuts.common.constant.Constants} 组装。行为说明见 {@code docs/AERON_AND_RAFT.md}。
+ * Aeron 订阅模板；各模块 {@link AeronProperties} 由
+ * {@link AeronSubscriberPropertiesFactory} 从
+ * {@link com.ganten.peanuts.common.constant.Constants} 组装。行为说明见
+ * {@code docs/AERON_AND_RAFT.md}。
  */
 @Slf4j
 public abstract class AbstractAeronSubscriber<M, N extends AbstractCodec<M>> implements AutoCloseable {
@@ -32,7 +34,7 @@ public abstract class AbstractAeronSubscriber<M, N extends AbstractCodec<M>> imp
     protected AeronPollWorker pollWorker;
     protected Aeron aeron;
     protected final N codec;
-    protected RaftApplyClient raftApplyClient;
+    protected RaftBootstrap bootstrap;
 
     public AbstractAeronSubscriber(AeronProperties properties, N codec) {
         this.properties = properties;
@@ -52,22 +54,22 @@ public abstract class AbstractAeronSubscriber<M, N extends AbstractCodec<M>> imp
      * @see RaftMessageApplyHandler#onCommitted
      * @return
      */
-    private RaftApplyClient createRaftApplyClient() {
-        CodecRaftStateMachine<M, N> fsm = new CodecRaftStateMachine<>(codec, this::onRaftLogCommitted);
+    private RaftBootstrap createRaftBootstrap() {
+        CodecRaftStateMachine<M, N> fsm = new CodecRaftStateMachine<>(codec, this::onRaftCommitted);
         RaftBootstrap bootstrap = new RaftBootstrap(properties.toRaftProperties(), fsm);
         try {
             bootstrap.start();
         } catch (IOException e) {
             throw new IllegalStateException("Raft start failed, streamId=" + properties.getStreamId(), e);
         }
-        return new RaftApplyClient(bootstrap);
+        return bootstrap;
     }
 
     /**
-     * 将这个方法传入到了 RaftApplyClient 构造方法内，这个方法会在多数派共识达成后被执行
+     * 该方法由状态机回调触发，会在多数派共识达成并 apply 时执行。
      * 这个方式是同步性更好的方案
      */
-    protected void onRaftLogCommitted(M message, boolean localApply, Closure done) {
+    protected void onRaftCommitted(M message, boolean localApply, Closure done) {
         if (properties.getRaftApplyMode() == RaftApplyMode.AFTER_COMMIT) {
             this.onMessage(message);
         }
@@ -89,7 +91,7 @@ public abstract class AbstractAeronSubscriber<M, N extends AbstractCodec<M>> imp
         byte[] payload = new byte[aeronMessage.getLength()];
         aeronMessage.getBuffer().getBytes(0, payload);
 
-        RaftApplyResult result = raftApplyClient.apply(payload);
+        ApplyResult result = bootstrap.apply(payload);
         // isAccepted() 是指 leader 侧提案已入队，并不是多数节点复制完成
         // 处于这种模式下，执行业务逻辑是低延迟方案
         if (result.isAccepted() && raftApplyMode == RaftApplyMode.ON_AERON_POLL) {
@@ -108,8 +110,8 @@ public abstract class AbstractAeronSubscriber<M, N extends AbstractCodec<M>> imp
         }
 
         if (properties.getRaftApplyMode() != RaftApplyMode.DISABLE) {
-            this.raftApplyClient = this.createRaftApplyClient();
-            if (raftApplyClient == null) {
+            this.bootstrap = this.createRaftBootstrap();
+            if (bootstrap == null) {
                 log.error("Raft is enabled but have no Raft client. streamId={}",
                         properties.getStreamId());
                 return;
@@ -158,9 +160,9 @@ public abstract class AbstractAeronSubscriber<M, N extends AbstractCodec<M>> imp
         }
         AeronRuntime.close(properties, aeron);
         aeron = null;
-        if (raftApplyClient != null && raftApplyClient.getRaftBootstrap() != null) {
-            raftApplyClient.getRaftBootstrap().shutdown();
+        if (bootstrap != null) {
+            bootstrap.shutdown();
         }
-        raftApplyClient = null;
+        bootstrap = null;
     }
 }

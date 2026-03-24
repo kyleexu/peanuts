@@ -3,7 +3,7 @@ package com.ganten.peanuts.protocol.aeron;
 /**
  * 启用 Raft 时，子类 {@code onMessage}（内存业务）在何处执行。
  * <p>
- * 注意：{@code RaftApplyClient#apply} 只是把提案交给 Raft，<strong>不会</strong>同步调用本类
+ * 注意：{@code RaftBootstrap#apply} 只是把提案交给 Raft，<strong>不会</strong>同步调用本类
  * {@code onRaftLogCommitted}；后者在日志提交后由 Raft 在<strong>另一条线程</strong>上回调。
  */
 public enum RaftApplyMode {
