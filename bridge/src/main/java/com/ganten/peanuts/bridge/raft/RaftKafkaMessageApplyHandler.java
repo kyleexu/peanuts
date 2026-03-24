@@ -3,8 +3,6 @@ package com.ganten.peanuts.bridge.raft;
 import java.util.function.Function;
 
 import org.springframework.kafka.core.KafkaTemplate;
-import org.springframework.kafka.support.SendResult;
-import org.springframework.util.concurrent.ListenableFutureCallback;
 
 import com.alipay.sofa.jraft.Closure;
 import com.alipay.sofa.jraft.Status;
