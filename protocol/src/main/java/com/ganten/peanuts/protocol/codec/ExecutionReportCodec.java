@@ -56,20 +56,26 @@ public class ExecutionReportCodec extends AbstractCodec<ExecutionReportProto> {
         ExecutionReportProto report = new ExecutionReportProto();
         report.setOrderId(buffer.getLong(currentOffset));
         currentOffset += 8;
-        report.setUserId(buffer.getLong(currentOffset));
-        currentOffset += 8;
-        
         report.setTradeId(buffer.getLong(currentOffset));
+        currentOffset += 8;
+        report.setUserId(buffer.getLong(currentOffset));
         currentOffset += 8;
         report.setBuyOrderId(buffer.getLong(currentOffset));
         currentOffset += 8;
         report.setSellOrderId(buffer.getLong(currentOffset));
         currentOffset += 8;
 
-        currentOffset += 8;
-        report.setContract(com.ganten.peanuts.common.enums.Contract.values()[buffer.getInt(currentOffset)]);
+        int contractOrdinal = buffer.getInt(currentOffset);
+        if (contractOrdinal < 0 || contractOrdinal >= com.ganten.peanuts.common.enums.Contract.values().length) {
+            throw new IllegalArgumentException("Invalid contract ordinal: " + contractOrdinal);
+        }
+        report.setContract(com.ganten.peanuts.common.enums.Contract.values()[contractOrdinal]);
         currentOffset += 4;
-        report.setSide(com.ganten.peanuts.common.enums.Side.values()[buffer.getInt(currentOffset)]);
+        int sideOrdinal = buffer.getInt(currentOffset);
+        if (sideOrdinal < 0 || sideOrdinal >= com.ganten.peanuts.common.enums.Side.values().length) {
+            throw new IllegalArgumentException("Invalid side ordinal: " + sideOrdinal);
+        }
+        report.setSide(com.ganten.peanuts.common.enums.Side.values()[sideOrdinal]);
         currentOffset += 4;
         int execTypeCode = buffer.getInt(currentOffset);
         currentOffset += 4;
