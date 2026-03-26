@@ -12,7 +12,7 @@ from datetime import datetime
 
 
 class MarketWebSocketClient:
-    def __init__(self, uri="ws://localhost:8080/ws/market"):
+    def __init__(self, uri="ws://localhost:8082/ws/market"):
         self.uri = uri
         self.ws = None
         self.message_count = 0
@@ -104,7 +104,7 @@ async def main():
     import argparse
     
     parser = argparse.ArgumentParser(description="Market WebSocket Client Test")
-    parser.add_argument("--uri", default="ws://localhost:8080/ws/market", help="WebSocket URI")
+    parser.add_argument("--uri", default="ws://localhost:8082/ws/market", help="WebSocket URI")
     parser.add_argument("--timeout", type=int, default=60, help="Listen timeout in seconds")
     
     args = parser.parse_args()

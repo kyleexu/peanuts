@@ -93,18 +93,18 @@ mvn clean package
 java -jar target/market-1.0.0-SNAPSHOT.jar
 ```
 
-默认端口：`8080`
+默认端口：`8082`
 
 ### 2. 访问 WebSocket 客户端 UI
 
 在浏览器中打开：
 ```
-http://localhost:8080/websocket-client.html
+http://localhost:8082/websocket-client.html
 ```
 
 ### 3. 连接 WebSocket
 
-- **WebSocket URL**: `ws://localhost:8080/ws/market`
+- **WebSocket URL**: `ws://localhost:8082/ws/market`
 - 点击 `Connect` 按钮建立连接
 - 状态指示灯变为 `Connected`
 
@@ -121,7 +121,7 @@ http://localhost:8080/websocket-client.html
 
 ```javascript
 // 创建 WebSocket 连接
-const ws = new WebSocket('ws://localhost:8080/ws/market');
+const ws = new WebSocket('ws://localhost:8082/ws/market');
 
 // 连接成功
 ws.onopen = function(event) {
@@ -162,7 +162,7 @@ function MarketDataComponent() {
     const [connected, setConnected] = useState(false);
 
     useEffect(() => {
-        const ws = new WebSocket('ws://localhost:8080/ws/market');
+        const ws = new WebSocket('ws://localhost:8082/ws/market');
 
         ws.onopen = () => setConnected(true);
         ws.onmessage = (event) => {
@@ -226,7 +226,7 @@ try {
 
 ```yaml
 server:
-  port: 8080
+  port: 8082
   servlet:
     context-path: /
 
@@ -246,7 +246,7 @@ registry.addHandler(marketDataWebSocketHandler, "/ws/market")
 ## 故障排查
 
 ### 1. WebSocket 连接失败
-- 检查市场服务是否运行在 `8080` 端口
+- 检查市场服务是否运行在 `8082` 端口
 - 确认防火墙未阻止 WebSocket 连接
 - 浏览器控制台查看具体错误信息
 

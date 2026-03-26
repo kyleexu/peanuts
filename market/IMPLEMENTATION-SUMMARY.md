@@ -165,7 +165,7 @@ mvn clean package -DskipTests
 java -jar target/market-1.0.0-SNAPSHOT.jar
 ```
 
-默认端口: `8080`
+默认端口: `8082`
 
 ### 3. 测试推送
 
@@ -173,10 +173,10 @@ java -jar target/market-1.0.0-SNAPSHOT.jar
 
 打开浏览器访问:
 ```
-http://localhost:8080/websocket-client.html
+http://localhost:8082/websocket-client.html
 ```
 
-- 输入 WebSocket URL: `ws://localhost:8080/ws/market`
+- 输入 WebSocket URL: `ws://localhost:8082/ws/market`
 - 点击 **Connect** 按钮
 - 观看实时数据推送（需要有交易事件）
 
@@ -194,12 +194,12 @@ python3 /Users/ganten/workspace/github/peanuts/market/test-websocket.py
 
 或指定参数:
 ```bash
-python3 test-websocket.py --uri ws://localhost:8080/ws/market --timeout 60
+python3 test-websocket.py --uri ws://localhost:8082/ws/market --timeout 60
 ```
 
 输出示例:
 ```
-✓ Connected to ws://localhost:8080/ws/market
+✓ Connected to ws://localhost:8082/ws/market
 Listening for messages (timeout: 60s)...
 [TICKER #1] BTC_USDT: Price=45000.00, Volume=1250.50
 [CANDLE #1] BTC_USDT 1m: O=45001.00, H=45200.00, L=44900.00, C=45100.00
@@ -208,7 +208,7 @@ Listening for messages (timeout: 60s)...
 #### 方式 C: JavaScript 客户端代码
 
 ```javascript
-const ws = new WebSocket('ws://localhost:8080/ws/market');
+const ws = new WebSocket('ws://localhost:8082/ws/market');
 
 ws.onopen = () => console.log('Connected');
 
@@ -308,7 +308,7 @@ if (System.currentTimeMillis() - lastPushTime > PUSH_INTERVAL_MS) {
 
 ```bash
 # 检查端口
-lsof -i :8080
+lsof -i :8082
 
 # 查看服务日志
 tail -f logs/market.log
@@ -330,7 +330,7 @@ tail -f logs/market.log
 JavaScript 中添加重连逻辑:
 ```javascript
 function connectWithRetry() {
-    ws = new WebSocket('ws://localhost:8080/ws/market');
+    ws = new WebSocket('ws://localhost:8082/ws/market');
     ws.onclose = () => {
         console.log('Reconnecting in 3s...');
         setTimeout(connectWithRetry, 3000);
