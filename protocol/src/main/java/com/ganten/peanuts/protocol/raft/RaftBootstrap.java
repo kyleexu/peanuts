@@ -90,7 +90,8 @@ public class RaftBootstrap {
         Task task = new Task();
         task.setData(ByteBuffer.wrap(payload));
         // 达成共识之后，会调用 done 里面的方式
-        task.setDone(status -> log.info("raft apply callback status={}", status));
+        // task.setDone(status -> log.info("raft apply callback status={}", status));
+        task.setDone(null);
         this.getNode().apply(task);
         // 提交到 Raft 队列后即返回；状态机在日志 commit 后异步 apply，与 CodecRaftStateMachine 回调
         return ApplyResult.ok();

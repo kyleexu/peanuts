@@ -20,6 +20,9 @@ import com.ganten.peanuts.engine.utils.ExecutionReportBuilder;
 import com.ganten.peanuts.protocol.model.ExecutionReportProto;
 import com.ganten.peanuts.protocol.model.TradeProto;
 
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j
 @Service
 public class MatchService {
 
@@ -70,7 +73,7 @@ public class MatchService {
     }
 
     private void newOrder(Order incomingOrder) {
-
+        log.info("新订单到达, 订单: {}", incomingOrder);
         OrderBook book = this.orderBook(incomingOrder.getContract());
 
         // 获取相反方向的订单队列
@@ -90,7 +93,8 @@ public class MatchService {
             BigDecimal matchedQuantity = remaining(incomingOrder).min(remaining(restingOrder));
             // 成交价格为待成交订单的价格
             BigDecimal matchedPrice = restingOrder.getPrice();
-
+            log.info("订单成交, 新订单: {}, 待成交订单: {}, 成交数量: {}, 成交价格: {}", incomingOrder.getOrderId(),
+                    restingOrder.getOrderId(), matchedQuantity, matchedPrice);
             // 填充新订单和待成交订单
             this.updateFilledQuantity(incomingOrder, matchedQuantity);
             this.updateFilledQuantity(restingOrder, matchedQuantity);
