@@ -6,7 +6,10 @@ import org.agrona.concurrent.UnsafeBuffer;
 
 import com.alipay.sofa.jraft.Closure;
 import com.alipay.sofa.jraft.Iterator;
+import com.alipay.sofa.jraft.Status;
 import com.alipay.sofa.jraft.core.StateMachineAdapter;
+import com.alipay.sofa.jraft.storage.snapshot.SnapshotReader;
+import com.alipay.sofa.jraft.storage.snapshot.SnapshotWriter;
 import com.ganten.peanuts.protocol.codec.AbstractCodec;
 
 /**
@@ -42,5 +45,20 @@ public class CodecRaftStateMachine<M, C extends AbstractCodec<M>> extends StateM
             applyHandler.onCommitted(message, done != null, done);
             iter.next();
         }
+    }
+
+    @Override
+    public void onSnapshotSave(SnapshotWriter writer, Closure done) {
+        // Current state is fully derived from committed logs, so no custom snapshot files are required.
+        // Return success to avoid periodic ERROR logs from the default adapter implementation.
+        if (done != null) {
+            done.run(Status.OK());
+        }
+    }
+
+    @Override
+    public boolean onSnapshotLoad(SnapshotReader reader) {
+        // No custom snapshot payload to restore.
+        return true;
     }
 }
