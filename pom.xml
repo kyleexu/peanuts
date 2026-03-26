@@ -5,6 +5,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <modules>
+        <module>driver</module>
         <module>account</module>
         <module>common</module>
         <module>protocol</module>
@@ -96,7 +97,7 @@
             </dependency>
             <dependency>
                 <groupId>io.aeron</groupId>
-                <artifactId>aeron-driver</artifactId>
+                <artifactId>driver</artifactId>
                 <version>1.44.6</version>
             </dependency>
             <dependency>

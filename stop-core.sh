@@ -51,5 +51,6 @@ mkdir -p "$RUN_DIR"
 stop_service "order"
 stop_service "account"
 stop_service "match"
+stop_service "driver"
 
 echo "Done."

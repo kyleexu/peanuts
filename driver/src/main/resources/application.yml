@@ -1,0 +1,6 @@
+server:
+  port: 8099
+
+aeron:
+  driver:
+    dir-delete-on-start: true
