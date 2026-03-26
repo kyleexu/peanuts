@@ -81,7 +81,7 @@ public abstract class AbstractAeronSubscriber<M, N extends AbstractCodec<M>> imp
     }
 
     private void handleMessage(M message) {
-        if (properties.getRaftApplyMode() == RaftApplyMode.DISABLE) {
+        if (!properties.isEnableRaft() || properties.getRaftApplyMode() == RaftApplyMode.DISABLE) {
             this.onMessage(message);
             return;
         }
@@ -112,7 +112,7 @@ public abstract class AbstractAeronSubscriber<M, N extends AbstractCodec<M>> imp
             return;
         }
 
-        if (properties.getRaftApplyMode() != RaftApplyMode.DISABLE) {
+        if (properties.isEnableRaft() && properties.getRaftApplyMode() != RaftApplyMode.DISABLE) {
             this.bootstrap = this.createRaftBootstrap();
             if (bootstrap == null) {
                 log.error("Raft is enabled but have no Raft client. streamId={}",

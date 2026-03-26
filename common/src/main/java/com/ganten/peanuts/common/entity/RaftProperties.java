@@ -9,6 +9,7 @@ import lombok.Data;
  */
 @Data
 public class RaftProperties {
+    private boolean enableRaft;
     private String dataPath;
     private String groupId;
     private String serverId;
