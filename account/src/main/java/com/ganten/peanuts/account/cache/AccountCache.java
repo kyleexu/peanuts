@@ -98,12 +98,21 @@ public class AccountCache {
 		Currency normalizedCurrency = requireCurrency(currency);
 		synchronized (userBalance) {
 			BigDecimal available = userBalance.available.getOrDefault(normalizedCurrency, BigDecimal.ZERO);
+			BigDecimal locked = userBalance.locked.getOrDefault(normalizedCurrency, BigDecimal.ZERO);
 			if (available.compareTo(amount) < 0) {
+				log.info(
+						"lock failed: insufficient available, userId={}, currency={}, requestAmount={}, available={}, locked={}",
+						userId, normalizedCurrency, DecimalLogFormatter.p4(amount), DecimalLogFormatter.p4(available),
+						DecimalLogFormatter.p4(locked));
 				return false;
 			}
-			BigDecimal locked = userBalance.locked.getOrDefault(normalizedCurrency, BigDecimal.ZERO);
 			userBalance.available.put(normalizedCurrency, available.subtract(amount));
 			userBalance.locked.put(normalizedCurrency, locked.add(amount));
+			log.info(
+					"lock success, userId={}, currency={}, lockAmount={}, availableBefore={}, availableAfter={}, lockedBefore={}, lockedAfter={}",
+					userId, normalizedCurrency, DecimalLogFormatter.p4(amount), DecimalLogFormatter.p4(available),
+					DecimalLogFormatter.p4(available.subtract(amount)), DecimalLogFormatter.p4(locked),
+					DecimalLogFormatter.p4(locked.add(amount)));
 			return true;
 		}
 	}

@@ -20,7 +20,7 @@
         </dependency>
         <dependency>
             <groupId>io.aeron</groupId>
-            <artifactId>driver</artifactId>
+            <artifactId>aeron-driver</artifactId>
         </dependency>
     </dependencies>
 

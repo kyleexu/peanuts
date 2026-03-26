@@ -25,6 +25,7 @@ public class MarketDataWebSocketHandler extends TextWebSocketHandler {
     private static final String TOPIC_TICKER = "ticker";
     private static final String TOPIC_CANDLE = "candle";
     private static final String TOPIC_ORDERBOOK = "orderbook";
+    private static final String TOPIC_TRADE = "trade";
 
     private static final String OP_SUBSCRIBE = "subscribe";
     private static final String OP_UNSUBSCRIBE = "unsubscribe";
@@ -134,6 +135,7 @@ public class MarketDataWebSocketHandler extends TextWebSocketHandler {
         defaults.add(TOPIC_TICKER);
         defaults.add(TOPIC_CANDLE);
         defaults.add(TOPIC_ORDERBOOK);
+        defaults.add(TOPIC_TRADE);
         return Collections.synchronizedSet(defaults);
     }
 
@@ -222,6 +224,11 @@ public class MarketDataWebSocketHandler extends TextWebSocketHandler {
             if (orderBook != null) {
                 topics.add(TOPIC_ORDERBOOK + "." + orderBook.getMultiplier());
             }
+            return topics;
+        }
+
+        if (TOPIC_TRADE.equals(type)) {
+            topics.add(TOPIC_TRADE);
             return topics;
         }
 

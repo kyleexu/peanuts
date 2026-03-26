@@ -50,6 +50,8 @@ public class AccountLockService {
         long requestId = requestIdGenerator.getAndIncrement();
         LockRequestProto request = LockRequestProtocolMapper.toLockRequest(
                 order, requestId, System.currentTimeMillis());
+        log.info("Lock request dispatch, requestId={}, userId={}, currency={}, amount={}, orderId={}",
+                requestId, request.getUserId(), request.getCurrency(), request.getAmount(), order.getOrderId());
         CompletableFuture<LockResponseProto> future = lockPendingRequests.put(requestId);
         LockResponseProto response;
         try {

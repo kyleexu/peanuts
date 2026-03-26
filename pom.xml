@@ -97,7 +97,7 @@
             </dependency>
             <dependency>
                 <groupId>io.aeron</groupId>
-                <artifactId>driver</artifactId>
+                <artifactId>aeron-driver</artifactId>
                 <version>1.44.6</version>
             </dependency>
             <dependency>

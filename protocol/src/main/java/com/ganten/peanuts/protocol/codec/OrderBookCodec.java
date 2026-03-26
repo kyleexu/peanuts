@@ -15,6 +15,7 @@ public class OrderBookCodec extends AbstractCodec<OrderBookProto> {
     private static final OrderBookCodec INSTANCE = new OrderBookCodec();
 
     private static final int MAX_ORDERS_PER_SIDE = 50;
+    private static final int BUFFER_CAPACITY = 64 * 1024;
 
     private OrderBookCodec() {
         super();
@@ -26,7 +27,7 @@ public class OrderBookCodec extends AbstractCodec<OrderBookProto> {
 
     @Override
     public AeronMessage encode(OrderBookProto snapshot) {
-        byte[] bytes = new byte[4096];
+        byte[] bytes = new byte[BUFFER_CAPACITY];
         UnsafeBuffer buffer = new UnsafeBuffer(bytes);
         int offset = 0;
 

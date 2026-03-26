@@ -2,10 +2,13 @@ package com.ganten.peanuts.market.messaging.subscriber;
 
 import org.springframework.stereotype.Component;
 
+import com.ganten.peanuts.common.entity.AeronProperties;
 import com.ganten.peanuts.common.entity.Trade;
 import com.ganten.peanuts.common.enums.AeronStream;
+import com.ganten.peanuts.common.enums.RaftApplyMode;
 import com.ganten.peanuts.market.mapping.TradeProtocolMapper;
 import com.ganten.peanuts.market.service.CandleService;
+import com.ganten.peanuts.market.service.TradeService;
 import com.ganten.peanuts.market.service.TickerService;
 import com.ganten.peanuts.protocol.aeron.AbstractAeronSubscriber;
 import com.ganten.peanuts.protocol.codec.TradeCodec;
@@ -19,15 +22,26 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 @Component
 public class TradeSubscriber extends AbstractAeronSubscriber<TradeProto, TradeCodec> {
+    private static final String INSTANCE_TAG = "market";
 
     private final TickerService tickerService;
     private final CandleService candleService;
+    private final TradeService tradeService;
 
     public TradeSubscriber(TickerService tickerService,
-            CandleService candleService) {
-        super(AeronStream.TRADE.toProperties(), TradeCodec.getInstance());
+            CandleService candleService,
+            TradeService tradeService) {
+        super(buildProperties(), TradeCodec.getInstance());
         this.tickerService = tickerService;
         this.candleService = candleService;
+        this.tradeService = tradeService;
+    }
+
+    private static AeronProperties buildProperties() {
+        AeronProperties properties = AeronStream.TRADE.toProperties(INSTANCE_TAG);
+        properties.setEnableRaft(false);
+        properties.setRaftApplyMode(RaftApplyMode.DISABLE);
+        return properties;
     }
 
     /**
@@ -37,6 +51,7 @@ public class TradeSubscriber extends AbstractAeronSubscriber<TradeProto, TradeCo
     @Override
     protected void onMessage(TradeProto message) {
         Trade trade = TradeProtocolMapper.toDomain(message);
+        tradeService.onTrade(trade);
         tickerService.onTrade(trade);
         candleService.onTrade(trade);
     }

@@ -7,17 +7,17 @@ RUN_DIR="$ROOT_DIR/run"
 
 mkdir -p "$LOG_DIR" "$RUN_DIR"
 
-echo "[0/5] Stopping existing services (for restart)"
+echo "[0/6] Stopping existing services (for restart)"
 if [[ -x "$ROOT_DIR/stop-core.sh" ]]; then
   "$ROOT_DIR/stop-core.sh" || true
 else
   echo "WARN: stop-core.sh not found or not executable, skip stop step."
 fi
 
-echo "[0.5/5] Clearing old logs"
+echo "[0.5/6] Clearing old logs"
 rm -f "$LOG_DIR"/*.log
 
-echo "[1/5] Building project: mvn clean package -U"
+echo "[1/6] Building project: mvn clean package -U"
 (cd "$ROOT_DIR" && mvn clean package -U)
 
 start_service() {
@@ -63,7 +63,7 @@ check_service_health() {
       exit 1
     fi
 
-    if [[ -f "$log_file" ]] && rg -q "APPLICATION FAILED TO START|Error starting ApplicationContext|Exception" "$log_file"; then
+    if [[ -f "$log_file" ]] && grep -E -q "APPLICATION FAILED TO START|Error starting ApplicationContext|Exception" "$log_file"; then
       echo "ERROR: $name failed during startup."
       tail -n 120 "$log_file" || true
       exit 1
@@ -91,9 +91,14 @@ start_service "account" "$ROOT_DIR/account/target/account-1.0.0-SNAPSHOT.jar"
 check_service_health "account" 20
 sleep 2
 
-echo "[5/5] Starting order"
+echo "[5/6] Starting order"
 start_service "order" "$ROOT_DIR/order/target/order-1.0.0-SNAPSHOT.jar"
 check_service_health "order" 20
+sleep 2
+
+echo "[6/6] Starting market"
+start_service "market" "$ROOT_DIR/market/target/market-1.0.0-SNAPSHOT.jar"
+check_service_health "market" 20
 
 echo ""
 echo "Done. Check logs:"
@@ -101,3 +106,4 @@ echo "  tail -f \"$LOG_DIR/driver.log\""
 echo "  tail -f \"$LOG_DIR/match.log\""
 echo "  tail -f \"$LOG_DIR/account.log\""
 echo "  tail -f \"$LOG_DIR/order.log\""
+echo "  tail -f \"$LOG_DIR/market.log\""

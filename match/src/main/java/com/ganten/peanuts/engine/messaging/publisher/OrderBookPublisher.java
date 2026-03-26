@@ -18,4 +18,25 @@ public class OrderBookPublisher extends AbstractAeronPublisher<OrderBookProto, O
     public OrderBookPublisher() {
         super(AeronStream.ORDER_BOOK.toProperties(), OrderBookCodec.getInstance());
     }
+
+    @Override
+    protected void onPublicationUnavailable(OrderBookProto message) {
+        log.warn("OrderBook publication unavailable. streamId={}", properties.getStreamId());
+    }
+
+    @Override
+    protected void onOfferResult(OrderBookProto message, long result) {
+        if (result < 0) {
+            log.warn("OrderBook offer failed. streamId={}, result={}, contract={}, bidSize={}, askSize={}",
+                    properties.getStreamId(), result, message == null ? null : message.getContract(),
+                    message == null || message.getBidOrders() == null ? -1 : message.getBidOrders().size(),
+                    message == null || message.getAskOrders() == null ? -1 : message.getAskOrders().size());
+        }
+    }
+
+    @Override
+    protected void onPublishError(OrderBookProto message, Throwable error) {
+        log.warn("OrderBook publish error. streamId={}, contract={}, error={}",
+                properties.getStreamId(), message == null ? null : message.getContract(), error.getMessage(), error);
+    }
 }

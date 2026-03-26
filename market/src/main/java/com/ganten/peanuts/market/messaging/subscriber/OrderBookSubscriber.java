@@ -2,7 +2,9 @@ package com.ganten.peanuts.market.messaging.subscriber;
 
 import org.springframework.stereotype.Component;
 
+import com.ganten.peanuts.common.entity.AeronProperties;
 import com.ganten.peanuts.common.enums.AeronStream;
+import com.ganten.peanuts.common.enums.RaftApplyMode;
 import com.ganten.peanuts.market.service.OrderBookService;
 import com.ganten.peanuts.protocol.aeron.AbstractAeronSubscriber;
 import com.ganten.peanuts.protocol.codec.OrderBookCodec;
@@ -13,12 +15,20 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 @Component
 public class OrderBookSubscriber extends AbstractAeronSubscriber<OrderBookProto, OrderBookCodec> {
+    private static final String INSTANCE_TAG = "market";
 
     private final OrderBookService orderBookService;
 
     public OrderBookSubscriber(OrderBookService orderBookService) {
-        super(AeronStream.ORDER_BOOK.toProperties(), OrderBookCodec.getInstance());
+        super(buildProperties(), OrderBookCodec.getInstance());
         this.orderBookService = orderBookService;
+    }
+
+    private static AeronProperties buildProperties() {
+        AeronProperties properties = AeronStream.ORDER_BOOK.toProperties(INSTANCE_TAG);
+        properties.setEnableRaft(false);
+        properties.setRaftApplyMode(RaftApplyMode.DISABLE);
+        return properties;
     }
 
     /**

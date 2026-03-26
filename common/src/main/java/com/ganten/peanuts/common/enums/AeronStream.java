@@ -29,6 +29,11 @@ public enum AeronStream {
     }
 
     public AeronProperties toProperties() {
+        return toProperties("default");
+    }
+
+    public AeronProperties toProperties(String instanceTag) {
+        String normalizedTag = normalizeTag(instanceTag);
         AeronProperties aeronProperties = new AeronProperties();
         aeronProperties.setEnableRaft(enableRaft);
         aeronProperties.setStreamId(this.streamId);
@@ -36,10 +41,11 @@ public enum AeronStream {
         if (enableRaft) {
             aeronProperties.setRaftApplyMode(this.raftApplyMode);
             aeronProperties.setRaftDataPath(
-                    System.getProperty("java.io.tmpdir") + "/peanuts-raft/stream-" + this.streamId);
-            aeronProperties.setRaftGroupId("peanuts-stream-" + this.streamId);
-            aeronProperties.setRaftServerId("127.0.0.1:" + (7000 + this.streamId));
-            aeronProperties.setRaftInitConf("127.0.0.1:" + (7000 + this.streamId));
+                    System.getProperty("java.io.tmpdir") + "/peanuts-raft/stream-" + this.streamId + "-" + normalizedTag);
+            aeronProperties.setRaftGroupId("peanuts-stream-" + this.streamId + "-" + normalizedTag);
+            int raftPort = 7000 + this.streamId + portOffset(normalizedTag);
+            aeronProperties.setRaftServerId("127.0.0.1:" + raftPort);
+            aeronProperties.setRaftInitConf("127.0.0.1:" + raftPort);
         } else {
             aeronProperties.setRaftApplyMode(RaftApplyMode.DISABLE);
         }
@@ -49,5 +55,19 @@ public enum AeronStream {
         aeronProperties.setEnabled(true);
         aeronProperties.setChannel("aeron:ipc");
         return aeronProperties;
+    }
+
+    private static String normalizeTag(String instanceTag) {
+        if (instanceTag == null || instanceTag.trim().isEmpty()) {
+            return "default";
+        }
+        return instanceTag.trim().toLowerCase().replaceAll("[^a-z0-9_-]", "-");
+    }
+
+    private static int portOffset(String normalizedTag) {
+        if ("default".equals(normalizedTag)) {
+            return 0;
+        }
+        return 1000 + Math.abs(normalizedTag.hashCode() % 1000);
     }
 }

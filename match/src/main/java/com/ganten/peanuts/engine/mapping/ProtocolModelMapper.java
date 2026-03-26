@@ -14,6 +14,7 @@ import com.ganten.peanuts.protocol.model.TradeProto;
 import com.ganten.peanuts.protocol.model.OrderBookProto.OrderSnapshot;
 
 public class ProtocolModelMapper {
+    private static final int ORDERBOOK_SNAPSHOT_MAX_ORDERS_PER_SIDE = 120;
 
     public static Order toDomainOrder(OrderProto command) {
         Order order = new Order();
@@ -51,14 +52,21 @@ public class ProtocolModelMapper {
         OrderBookProto snapshot = new OrderBookProto();
         snapshot.setContract(contract);
         snapshot.setTimestamp(System.currentTimeMillis());
-        snapshot.setBidOrders(toOrderLevels(orderBook.getBuyOrders()));
-        snapshot.setAskOrders(toOrderLevels(orderBook.getSellOrders()));
+        snapshot.setBidOrders(toOrderLevels(orderBook.getBuyOrders(), ORDERBOOK_SNAPSHOT_MAX_ORDERS_PER_SIDE));
+        snapshot.setAskOrders(toOrderLevels(orderBook.getSellOrders(), ORDERBOOK_SNAPSHOT_MAX_ORDERS_PER_SIDE));
         return snapshot;
     }
 
-    private static List<OrderSnapshot> toOrderLevels(PriorityQueue<Order> orders) {
-        List<OrderSnapshot> levels = new ArrayList<OrderSnapshot>(orders.size());
+    private static List<OrderSnapshot> toOrderLevels(PriorityQueue<Order> orders, int maxSize) {
+        if (orders == null || orders.isEmpty() || maxSize <= 0) {
+            return new ArrayList<OrderSnapshot>(0);
+        }
+        List<OrderSnapshot> levels = new ArrayList<OrderSnapshot>(Math.min(orders.size(), maxSize));
+        int count = 0;
         for (Order order : orders) {
+            if (count >= maxSize) {
+                break;
+            }
             OrderSnapshot level = new OrderSnapshot();
             level.setOrderId(order.getOrderId());
             level.setUserId(order.getUserId());
@@ -68,6 +76,7 @@ public class ProtocolModelMapper {
             level.setRemainingQuantity(order.getTotalQuantity().subtract(order.getFilledQuantity()));
             level.setTimestamp(order.getTimestamp());
             levels.add(level);
+            count++;
         }
         return levels;
     }

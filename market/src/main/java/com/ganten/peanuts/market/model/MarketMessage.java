@@ -9,7 +9,7 @@ public class MarketMessage implements Serializable {
     private static final long serialVersionUID = 1L;
 
     /**
-     * 消息类型: ticker / candle / orderBook
+     * 消息类型: ticker / candle / orderBook / trade
      */
     private String type;
 
@@ -33,6 +33,11 @@ public class MarketMessage implements Serializable {
      */
     private OrderBookSnapshot orderBook;
 
+    /**
+     * 最新成交快照（价格+数量）
+     */
+    private TradeSnapshot trade;
+
     public MarketMessage() {}
 
     public MarketMessage(String type, long timestamp) {
@@ -55,6 +60,12 @@ public class MarketMessage implements Serializable {
     public static MarketMessage ofOrderBook(OrderBookSnapshot orderBook) {
         MarketMessage msg = new MarketMessage("orderBook", System.currentTimeMillis());
         msg.orderBook = orderBook;
+        return msg;
+    }
+
+    public static MarketMessage ofTrade(TradeSnapshot trade) {
+        MarketMessage msg = new MarketMessage("trade", System.currentTimeMillis());
+        msg.trade = trade;
         return msg;
     }
 
@@ -97,5 +108,13 @@ public class MarketMessage implements Serializable {
 
     public void setOrderBook(OrderBookSnapshot orderBook) {
         this.orderBook = orderBook;
+    }
+
+    public TradeSnapshot getTrade() {
+        return trade;
+    }
+
+    public void setTrade(TradeSnapshot trade) {
+        this.trade = trade;
     }
 }

@@ -1,18 +1,18 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <balances>
-    <balance userId="10001" currency="USDT" available="1000000" />
+    <balance userId="10001" currency="USDT" available="10000000000" />
     <balance userId="10001" currency="BTC" available="100" />
     <balance userId="10001" currency="ETH" available="1000" />
-    <balance userId="10002" currency="USDT" available="1000000" />
+    <balance userId="10002" currency="USDT" available="10000000000" />
     <balance userId="10002" currency="BTC" available="100" />
     <balance userId="10002" currency="ETH" available="1000" />
-    <balance userId="10003" currency="USDT" available="1000000" />
+    <balance userId="10003" currency="USDT" available="10000000000" />
     <balance userId="10003" currency="BTC" available="100" />
     <balance userId="10003" currency="ETH" available="1000" />
-    <balance userId="20001" currency="USDT" available="2000000" />
+    <balance userId="20001" currency="USDT" available="10000000000" />
     <balance userId="20001" currency="BTC" available="200" />
     <balance userId="20001" currency="ETH" available="2000" />
-    <balance userId="20002" currency="USDT" available="2000000" />
+    <balance userId="20002" currency="USDT" available="10000000000" />
     <balance userId="20002" currency="BTC" available="200" />
     <balance userId="20002" currency="ETH" available="2000" />
 </balances>

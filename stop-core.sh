@@ -48,6 +48,7 @@ stop_service() {
 mkdir -p "$RUN_DIR"
 
 # Stop in reverse dependency order.
+stop_service "market"
 stop_service "order"
 stop_service "account"
 stop_service "match"

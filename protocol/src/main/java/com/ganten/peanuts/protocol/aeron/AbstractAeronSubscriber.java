@@ -18,6 +18,7 @@ import com.ganten.peanuts.protocol.raft.RaftBootstrap.ApplyResult;
 import com.ganten.peanuts.protocol.raft.RaftMessageApplyHandler;
 
 import io.aeron.Aeron;
+import io.aeron.FragmentAssembler;
 import io.aeron.Subscription;
 import io.aeron.logbuffer.FragmentHandler;
 import lombok.extern.slf4j.Slf4j;
@@ -132,7 +133,7 @@ public abstract class AbstractAeronSubscriber<M, N extends AbstractCodec<M>> imp
             return;
         }
 
-        FragmentHandler fragmentHandler = (buffer, offset, length, header) -> {
+        FragmentHandler messageHandler = (buffer, offset, length, header) -> {
             try {
                 M message = decode(buffer, offset);
                 if (message == null) {
@@ -143,6 +144,8 @@ public abstract class AbstractAeronSubscriber<M, N extends AbstractCodec<M>> imp
                 log.error("Aeron poll loop failed", t);
             }
         };
+        // Reassemble fragmented Aeron messages before decode.
+        FragmentHandler fragmentHandler = new FragmentAssembler(messageHandler);
 
         this.pollWorker = AeronPollWorker.start(
                 () -> this.subscription.poll(fragmentHandler, properties.getFragmentLimit()),
