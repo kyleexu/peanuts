@@ -1,6 +1,7 @@
 package com.ganten.peanuts.gateway.scheduler;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
@@ -63,6 +64,7 @@ public class RandomOrderScheduler {
         } else {
             moved = clamp(moved, BigDecimal.valueOf(1500), BigDecimal.valueOf(5000));
         }
+        moved = moved.setScale(4, RoundingMode.HALF_UP);
         anchors.put(contract, moved);
         return moved;
     }
@@ -72,8 +74,8 @@ public class RandomOrderScheduler {
         BigDecimal spreadBps = BigDecimal.valueOf(ThreadLocalRandom.current().nextInt(6, 16)) // 0.06% - 0.15%
                 .divide(BigDecimal.valueOf(10000));
         BigDecimal halfSpread = anchor.multiply(spreadBps);
-        BigDecimal bid = anchor.subtract(halfSpread).max(BigDecimal.ONE);
-        BigDecimal ask = anchor.add(halfSpread).max(BigDecimal.ONE);
+        BigDecimal bid = anchor.subtract(halfSpread).max(BigDecimal.ONE).setScale(4, RoundingMode.HALF_UP);
+        BigDecimal ask = anchor.add(halfSpread).max(BigDecimal.ONE).setScale(4, RoundingMode.HALF_UP);
 
         BigDecimal makerQty = BigDecimal.valueOf(ThreadLocalRandom.current().nextInt(1, 4));
         submitOrder(buildOrder(makerUser, contract, Side.BUY, bid, makerQty));
@@ -93,8 +95,9 @@ public class RandomOrderScheduler {
         BigDecimal price = side == Side.BUY
                 ? anchor.multiply(BigDecimal.ONE.add(aggressiveBps))
                 : anchor.multiply(BigDecimal.ONE.subtract(aggressiveBps));
+        price = price.max(BigDecimal.ONE).setScale(4, RoundingMode.HALF_UP);
         BigDecimal qty = BigDecimal.valueOf(ThreadLocalRandom.current().nextInt(1, 6));
-        submitOrder(buildOrder(takerUser, contract, side, price.max(BigDecimal.ONE), qty));
+        submitOrder(buildOrder(takerUser, contract, side, price, qty));
     }
 
     private void submitOrder(Order order) {

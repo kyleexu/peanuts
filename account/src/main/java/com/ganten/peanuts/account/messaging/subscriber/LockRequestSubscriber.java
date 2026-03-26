@@ -17,7 +17,8 @@ import lombok.extern.slf4j.Slf4j;
  * Aeron: account -> order
  * <p>
  * 无 Raft：{@link #onMessage} 走内存 {@link AccountService#tryLock}。<br>
- * 有 Raft：仅将编码后的命令通过 {@link com.ganten.peanuts.protocol.raft.RaftBootstrap#apply(byte[])} 写入
+ * 有 Raft：仅将编码后的命令通过
+ * {@link com.ganten.peanuts.protocol.raft.RaftBootstrap#apply(byte[])} 写入
  * Raft 日志（propose），
  * 不在此链路处理业务；propose 被 leader 接受后由 {@link #onRaftAccepted} 发回执。
  */
@@ -39,12 +40,13 @@ public class LockRequestSubscriber extends AbstractAeronSubscriber<LockRequestPr
     @Override
     protected void onMessage(LockRequestProto message) {
         boolean success = accountService.tryLock(message.getUserId(), message.getCurrency(), message.getAmount());
-
+        log.info("Lock request completed, requestId={}, request={}, success={}", message.getRequestId(), message,
+                success);
         LockResponseProto lockResponseProto = new LockResponseProto();
         lockResponseProto.setRequestId(message.getRequestId());
         lockResponseProto.setSuccess(success);
         lockResponseProto.setMessage(success ? "Lock request successful" : "Lock request failed");
-
+        log.info("Lock response, response={}", lockResponseProto);
         lockResponsePublisher.offer(lockResponseProto);
     }
 }

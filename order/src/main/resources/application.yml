@@ -2,6 +2,8 @@ server:
   port: 8080
 
 gateway:
+  account-lock:
+    timeout-ms: 3000
   aeron:
     enabled: true
     channel: aeron:ipc

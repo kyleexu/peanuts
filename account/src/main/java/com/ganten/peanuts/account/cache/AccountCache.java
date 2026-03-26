@@ -19,6 +19,7 @@ import org.w3c.dom.NodeList;
 
 import com.ganten.peanuts.common.entity.AccountAssetSnapshot;
 import com.ganten.peanuts.common.enums.Currency;
+import com.ganten.peanuts.common.util.DecimalLogFormatter;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -174,7 +175,9 @@ public class AccountCache {
 		UserBalance sell = getOrCreateBalance(sellUserId);
 		UserBalance first = buyUserId <= sellUserId ? buy : sell;
 		UserBalance second = buyUserId <= sellUserId ? sell : buy;
-
+		log.info("settleTrade, buyUserId={}, sellUserId={}, baseCurrency={}, quoteCurrency={}, price={}, quantity={}",
+				buyUserId, sellUserId, baseCurrency, quoteCurrency, DecimalLogFormatter.p4(price),
+				DecimalLogFormatter.p4(quantity));
 		synchronized (first) {
 			synchronized (second) {
 				BigDecimal buyLockedQuote = buy.locked.getOrDefault(quote, BigDecimal.ZERO);
@@ -185,10 +188,14 @@ public class AccountCache {
 
 				buy.locked.put(quote, buyLockedQuote.subtract(notional));
 				BigDecimal buyAvailableBase = buy.available.getOrDefault(base, BigDecimal.ZERO);
+				log.info("buyUserId={}, buyAvailableBase={}, quantity={}", buyUserId,
+						DecimalLogFormatter.p4(buyAvailableBase), DecimalLogFormatter.p4(quantity));
 				buy.available.put(base, buyAvailableBase.add(quantity));
 
 				sell.locked.put(base, sellLockedBase.subtract(quantity));
 				BigDecimal sellAvailableQuote = sell.available.getOrDefault(quote, BigDecimal.ZERO);
+				log.info("sellUserId={}, sellAvailableQuote={}, notional={}", sellUserId,
+						DecimalLogFormatter.p4(sellAvailableQuote), DecimalLogFormatter.p4(notional));
 				sell.available.put(quote, sellAvailableQuote.add(notional));
 				return true;
 			}

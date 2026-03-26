@@ -5,6 +5,7 @@ import org.springframework.stereotype.Component;
 import com.ganten.peanuts.account.mapping.TradeProtocolMapper;
 import com.ganten.peanuts.account.service.AccountService;
 import com.ganten.peanuts.common.entity.Trade;
+import com.ganten.peanuts.common.util.DecimalLogFormatter;
 import com.ganten.peanuts.protocol.aeron.AbstractAeronSubscriber;
 import com.ganten.peanuts.protocol.aeron.AeronProperties;
 import com.ganten.peanuts.protocol.codec.TradeCodec;
@@ -30,6 +31,12 @@ public class TradeSubscriber extends AbstractAeronSubscriber<TradeProto, TradeCo
     @Override
     protected void onMessage(TradeProto message) {
         Trade trade = TradeProtocolMapper.toDomain(message);
+        log.info("接收到成交记录, tradeId={}, buyOrderId={}, sellOrderId={}, price={}, quantity={}, ts={}", trade.getTradeId(),
+                trade.getBuyOrderId(),
+                trade.getSellOrderId(),
+                DecimalLogFormatter.p4(trade.getPrice()),
+                DecimalLogFormatter.p4(trade.getQuantity()),
+                trade.getTimestamp());
         boolean settled = accountService.applyTrade(trade);
         if (!settled) {
             log.warn("Trade settlement skipped due to insufficient locked balance, tradeId={}", trade.getTradeId());

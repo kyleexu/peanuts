@@ -49,7 +49,6 @@ public class LockPendingRequests {
         CompletableFuture<LockResponseProto> future = pending.remove(response.getRequestId());
         if (future != null) {
             future.complete(response);
-            log.info("Lock request completed, requestId={}", response.getRequestId());
         } else {
             log.error("Lock request not found, requestId={}", response.getRequestId());
         }

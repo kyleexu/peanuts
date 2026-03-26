@@ -13,6 +13,7 @@ import com.ganten.peanuts.common.enums.Contract;
 import com.ganten.peanuts.common.enums.OrderAction;
 import com.ganten.peanuts.common.enums.OrderStatus;
 import com.ganten.peanuts.common.enums.Side;
+import com.ganten.peanuts.common.util.DecimalLogFormatter;
 import com.ganten.peanuts.engine.messaging.publisher.ExecutionReportPublisher;
 import com.ganten.peanuts.engine.messaging.publisher.TradePublisher;
 import com.ganten.peanuts.engine.model.OrderBook;
@@ -73,7 +74,22 @@ public class MatchService {
     }
 
     private void newOrder(Order incomingOrder) {
-        log.info("新订单到达, 订单: {}", incomingOrder);
+        log.info(
+                "新订单到达, orderId={}, userId={}, contract={}, side={}, type={}, tif={}, action={}, status={}, price={}, totalQty={}, filledQty={}, remainingQty={}, targetOrderId={}, ts={}",
+                incomingOrder.getOrderId(),
+                incomingOrder.getUserId(),
+                incomingOrder.getContract(),
+                incomingOrder.getSide(),
+                incomingOrder.getOrderType(),
+                incomingOrder.getTimeInForce(),
+                incomingOrder.getAction(),
+                incomingOrder.getOrderStatus(),
+                DecimalLogFormatter.p4(incomingOrder.getPrice()),
+                DecimalLogFormatter.p4(incomingOrder.getTotalQuantity()),
+                DecimalLogFormatter.p4(incomingOrder.getFilledQuantity()),
+                DecimalLogFormatter.p4(remaining(incomingOrder)),
+                incomingOrder.getTargetOrderId(),
+                incomingOrder.getTimestamp());
         OrderBook book = this.orderBook(incomingOrder.getContract());
 
         // 获取相反方向的订单队列
@@ -94,7 +110,7 @@ public class MatchService {
             // 成交价格为待成交订单的价格
             BigDecimal matchedPrice = restingOrder.getPrice();
             log.info("订单成交, 新订单: {}, 待成交订单: {}, 成交数量: {}, 成交价格: {}", incomingOrder.getOrderId(),
-                    restingOrder.getOrderId(), matchedQuantity, matchedPrice);
+                    restingOrder.getOrderId(), DecimalLogFormatter.p4(matchedQuantity), DecimalLogFormatter.p4(matchedPrice));
             // 填充新订单和待成交订单
             this.updateFilledQuantity(incomingOrder, matchedQuantity);
             this.updateFilledQuantity(restingOrder, matchedQuantity);
@@ -154,6 +170,12 @@ public class MatchService {
         /**
          * 发布交易
          */
+        log.info("发布交易, tradeId={}, buyOrderId={}, sellOrderId={}, price={}, quantity={}, ts={}", tradeId,
+                trade.getBuyOrderId(),
+                trade.getSellOrderId(),
+                DecimalLogFormatter.p4(matchedPrice),
+                DecimalLogFormatter.p4(matchedQuantity),
+                System.currentTimeMillis());
         tradePublisher.offer(trade);
 
         /**
@@ -279,4 +301,5 @@ public class MatchService {
             order.setOrderStatus(OrderStatus.PARTIALLY_FILLED);
         }
     }
+
 }

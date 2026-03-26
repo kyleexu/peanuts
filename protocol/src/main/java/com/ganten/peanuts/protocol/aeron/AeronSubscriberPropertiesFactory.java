@@ -28,7 +28,7 @@ public final class AeronSubscriberPropertiesFactory {
             p.setRaftServerId(Constants.subscriberRaftServerId(streamId));
             p.setRaftInitConf(Constants.subscriberRaftInitConf(streamId));
         }
-        p.setRaftApplyMode(RaftApplyMode.valueOf(Constants.AERON_SUBSCRIBER_RAFT_APPLY_MODE_NAME));
+        p.setRaftApplyMode(RaftApplyMode.AFTER_COMMIT);
         return p;
     }
 

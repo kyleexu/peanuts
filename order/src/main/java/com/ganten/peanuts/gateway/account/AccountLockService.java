@@ -2,8 +2,10 @@ package com.ganten.peanuts.gateway.account;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicLong;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import com.ganten.peanuts.common.constant.Constants;
@@ -30,11 +32,14 @@ public class AccountLockService {
 
     // 使用这个 generator 生成锁请求的 requestId
     private final AtomicLong requestIdGenerator = new AtomicLong(1L);
+    private final long lockTimeoutMs;
 
     public AccountLockService(LockPendingRequests lockPendingRequests,
-            LockRequestPublisher requestPublisher) {
+            LockRequestPublisher requestPublisher,
+            @Value("${gateway.account-lock.timeout-ms:" + Constants.ACCOUNT_LOCK_TIMEOUT_MS + "}") long lockTimeoutMs) {
         this.lockPendingRequests = lockPendingRequests;
         this.requestPublisher = requestPublisher;
+        this.lockTimeoutMs = lockTimeoutMs;
     }
 
     /**
@@ -48,18 +53,30 @@ public class AccountLockService {
         CompletableFuture<LockResponseProto> future = lockPendingRequests.put(requestId);
         LockResponseProto response;
         try {
-            requestPublisher.offer(request);
+            boolean offered = requestPublisher.offerWithRetry(request);
+            if (!offered) {
+                lockPendingRequests.remove(requestId);
+                return LockRequestProtocolMapper.toFailureResponse(
+                        requestId, "account lock request publish failed");
+            }
             /**
              * 第 6 步，等待锁响应，拿到锁响应结果后
              * 关键: 这里会阻塞等待锁响应，直到锁响应返回或超时
              */
-            response = future.get(Constants.ACCOUNT_LOCK_TIMEOUT_MS, TimeUnit.MILLISECONDS);
-        } catch (Exception ex) {
-            log.error("Lock request failed, requestId={}, error={}", requestId, ex.getMessage());
+            response = future.get(lockTimeoutMs, TimeUnit.MILLISECONDS);
+        } catch (TimeoutException ex) {
+            log.warn("Lock request timeout, requestId={}, timeoutMs={}, request={}", requestId, lockTimeoutMs, request);
             lockPendingRequests.remove(requestId);
-            response = LockRequestProtocolMapper.toFailureResponse(
-                    requestId, "account lock request timeout or failed: " + ex.getMessage());
+            response = LockRequestProtocolMapper.toFailureResponse(requestId,
+                    "account lock request timeout, timeoutMs=" + lockTimeoutMs);
+        } catch (Exception ex) {
+            log.error("Lock request failed, requestId={}, request={}, error={}", requestId, request, ex.getMessage(),
+                    ex);
+            lockPendingRequests.remove(requestId);
+            response = LockRequestProtocolMapper.toFailureResponse(requestId,
+                    "account lock request timeout or failed: " + ex.getMessage());
         }
+        log.info("Lock request completed, requestId={}, response={}", requestId, response);
         return response;
     }
 }

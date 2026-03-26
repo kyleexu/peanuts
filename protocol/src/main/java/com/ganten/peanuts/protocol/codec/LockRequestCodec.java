@@ -21,15 +21,18 @@ public class LockRequestCodec extends AbstractCodec<LockRequestProto> {
 
     @Override
     public AeronMessage encode(LockRequestProto request) {
-        byte[] bytes = new byte[256];
+        String currency = request.getCurrency() == null ? "" : request.getCurrency().name();
+        String amount = request.getAmount() == null ? "" : request.getAmount().toPlainString();
+        int capacity = 8 + 8 + (4 + currency.length()) + (4 + amount.length()) + 8;
+        byte[] bytes = new byte[Math.max(64, capacity)];
         UnsafeBuffer buffer = new UnsafeBuffer(bytes);
         int offset = 0;
         buffer.putLong(offset, request.getRequestId());
         offset += 8;
         buffer.putLong(offset, request.getUserId());
         offset += 8;
-        offset += buffer.putStringAscii(offset, request.getCurrency() == null ? "" : request.getCurrency().name());
-        offset += buffer.putStringAscii(offset, request.getAmount() == null ? "" : request.getAmount().toPlainString());
+        offset += buffer.putStringAscii(offset, currency);
+        offset += buffer.putStringAscii(offset, amount);
         buffer.putLong(offset, request.getTimestamp());
         offset += 8;
         return new AeronMessage(buffer, offset);

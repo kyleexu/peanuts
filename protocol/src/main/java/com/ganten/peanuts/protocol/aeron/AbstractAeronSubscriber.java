@@ -71,6 +71,7 @@ public abstract class AbstractAeronSubscriber<M, N extends AbstractCodec<M>> imp
      */
     protected void onRaftCommitted(M message, boolean localApply, Closure done) {
         if (properties.getRaftApplyMode() == RaftApplyMode.AFTER_COMMIT) {
+            log.info("Raft apply committed, streamId:{}. message={}", properties.getStreamId(), message);
             this.onMessage(message);
         }
         if (localApply && done != null) {
@@ -94,11 +95,12 @@ public abstract class AbstractAeronSubscriber<M, N extends AbstractCodec<M>> imp
         ApplyResult result = bootstrap.apply(payload);
         // isAccepted() 是指 leader 侧提案已入队，并不是多数节点复制完成
         // 处于这种模式下，执行业务逻辑是低延迟方案
-        if (result.isAccepted() && raftApplyMode == RaftApplyMode.ON_AERON_POLL) {
-            this.onMessage(message);
-            log.debug("Raft apply accepted, streamId:{}.", streamId);
+        if (result.isAccepted()) {
+            if (raftApplyMode == RaftApplyMode.ON_AERON_POLL) {
+                this.onMessage(message);
+            }
         } else {
-            log.warn("Raft apply rejected, streamId:{}, reason:{}", streamId, result.getReason());
+            log.warn("Raft apply rejected, streamId:{}.", streamId);
         }
     }
 

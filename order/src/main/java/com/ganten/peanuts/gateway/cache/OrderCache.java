@@ -44,6 +44,7 @@ public class OrderCache {
         }
         synchronized (order) {
             ExecType execType = report.getExecType();
+            log.info("applyExecutionReport, orderId={}, execType={}", orderId, execType);
             if (execType == ExecType.TRADE) {
                 BigDecimal delta = report.getMatchedQuantity();
                 if (delta != null) {
