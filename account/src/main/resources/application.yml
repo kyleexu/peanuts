@@ -1,2 +1,6 @@
 server:
   port: 8081
+
+account:
+  initial-balance:
+    xml: classpath:initial-balances.xml

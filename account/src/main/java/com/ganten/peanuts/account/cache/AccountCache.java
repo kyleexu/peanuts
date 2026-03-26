@@ -4,14 +4,72 @@ import java.math.BigDecimal;
 import java.util.EnumMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+
+import javax.annotation.PostConstruct;
+import javax.xml.XMLConstants;
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
+import org.w3c.dom.Document;
+import org.w3c.dom.Element;
+import org.w3c.dom.NodeList;
+
 import com.ganten.peanuts.common.entity.AccountAssetSnapshot;
 import com.ganten.peanuts.common.enums.Currency;
 
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j
 @Service
 public class AccountCache {
 
+	@Value("${account.initial-balance.xml:classpath:initial-balances.xml}")
+	private Resource initialBalanceXml;
+
 	private final Map<Long, UserBalance> accountAssets = new ConcurrentHashMap<Long, UserBalance>();
+
+	@PostConstruct
+	public void loadInitialBalances() {
+		if (initialBalanceXml == null || !initialBalanceXml.exists()) {
+			log.warn("Initial balance XML not found: {}", initialBalanceXml);
+			return;
+		}
+		try {
+			DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+			factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
+			factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+			DocumentBuilder builder = factory.newDocumentBuilder();
+			Document document = builder.parse(initialBalanceXml.getInputStream());
+
+			NodeList balances = document.getElementsByTagName("balance");
+			int loaded = 0;
+			for (int i = 0; i < balances.getLength(); i++) {
+				Element node = (Element) balances.item(i);
+				long userId = Long.parseLong(node.getAttribute("userId"));
+				Currency currency = Currency.valueOf(node.getAttribute("currency"));
+				BigDecimal available = new BigDecimal(node.getAttribute("available"));
+				String lockedAttr = node.getAttribute("locked");
+				BigDecimal locked = lockedAttr == null || lockedAttr.isEmpty()
+						? BigDecimal.ZERO
+						: new BigDecimal(lockedAttr);
+				increaseAvailable(userId, currency, available);
+				if (locked.signum() > 0) {
+					UserBalance userBalance = getOrCreateBalance(userId);
+					synchronized (userBalance) {
+						BigDecimal current = userBalance.locked.getOrDefault(currency, BigDecimal.ZERO);
+						userBalance.locked.put(currency, current.add(locked));
+					}
+				}
+				loaded++;
+			}
+			log.info("Loaded {} initial balances from {}", loaded, initialBalanceXml);
+		} catch (Exception ex) {
+			throw new IllegalStateException("Failed to load initial balances from xml: " + initialBalanceXml, ex);
+		}
+	}
 
 	public AccountAssetSnapshot query(long userId, Currency currency) {
 		UserBalance userBalance = getOrCreateBalance(userId);
