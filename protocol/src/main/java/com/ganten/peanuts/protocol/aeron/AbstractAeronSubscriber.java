@@ -8,6 +8,8 @@ import org.agrona.DirectBuffer;
 
 import com.alipay.sofa.jraft.Closure;
 import com.alipay.sofa.jraft.Status;
+import com.ganten.peanuts.common.entity.AeronProperties;
+import com.ganten.peanuts.common.enums.RaftApplyMode;
 import com.ganten.peanuts.protocol.codec.AbstractCodec;
 import com.ganten.peanuts.protocol.model.AeronMessage;
 import com.ganten.peanuts.protocol.raft.CodecRaftStateMachine;
@@ -22,8 +24,7 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * Aeron 订阅模板；各模块 {@link AeronProperties} 由
- * {@link AeronSubscriberPropertiesFactory} 从
- * {@link com.ganten.peanuts.common.constant.Constants} 组装。行为说明见
+ * {@link com.ganten.peanuts.common.enums.AeronStream#toProperties()} 组装。行为说明见
  * {@code docs/AERON_AND_RAFT.md}。
  */
 @Slf4j

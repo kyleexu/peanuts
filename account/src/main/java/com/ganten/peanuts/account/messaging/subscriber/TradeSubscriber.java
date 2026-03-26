@@ -1,13 +1,12 @@
 package com.ganten.peanuts.account.messaging.subscriber;
 
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 import com.ganten.peanuts.account.mapping.TradeProtocolMapper;
 import com.ganten.peanuts.account.service.AccountService;
 import com.ganten.peanuts.common.entity.Trade;
+import com.ganten.peanuts.common.enums.AeronStream;
 import com.ganten.peanuts.common.util.DecimalLogFormatter;
 import com.ganten.peanuts.protocol.aeron.AbstractAeronSubscriber;
-import com.ganten.peanuts.protocol.aeron.AeronProperties;
 import com.ganten.peanuts.protocol.codec.TradeCodec;
 import com.ganten.peanuts.protocol.model.TradeProto;
 import lombok.extern.slf4j.Slf4j;
@@ -18,9 +17,8 @@ public class TradeSubscriber extends AbstractAeronSubscriber<TradeProto, TradeCo
 
     private final AccountService accountService;
 
-    public TradeSubscriber(@Qualifier("tradeAeronProperties") AeronProperties aeronProperties,
-            AccountService accountService) {
-        super(aeronProperties, TradeCodec.getInstance());
+    public TradeSubscriber(AccountService accountService) {
+        super(AeronStream.TRADE.toProperties(), TradeCodec.getInstance());
         this.accountService = accountService;
     }
 

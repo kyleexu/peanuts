@@ -1,11 +1,10 @@
 package com.ganten.peanuts.gateway.messaging.subscriber;
 
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
+import com.ganten.peanuts.common.enums.AeronStream;
 import com.ganten.peanuts.gateway.account.LockPendingRequests;
 import com.ganten.peanuts.protocol.aeron.AbstractAeronSubscriber;
-import com.ganten.peanuts.protocol.aeron.AeronProperties;
 import com.ganten.peanuts.protocol.codec.LockResponseCodec;
 import com.ganten.peanuts.protocol.model.LockResponseProto;
 
@@ -17,10 +16,8 @@ public class LockResponseSubscriber extends AbstractAeronSubscriber<LockResponse
 
     private final LockPendingRequests pendingRequests;
 
-    public LockResponseSubscriber(
-            @Qualifier("accountLockAeronResponseProperties") AeronProperties aeronProperties,
-            LockPendingRequests pendingRequests) {
-        super(aeronProperties, LockResponseCodec.getInstance());
+    public LockResponseSubscriber(LockPendingRequests pendingRequests) {
+        super(AeronStream.LOCK_RESPONSE.toProperties(), LockResponseCodec.getInstance());
         this.pendingRequests = pendingRequests;
     }
 

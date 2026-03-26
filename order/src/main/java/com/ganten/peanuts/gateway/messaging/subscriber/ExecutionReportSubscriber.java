@@ -1,11 +1,10 @@
 package com.ganten.peanuts.gateway.messaging.subscriber;
 
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
+import com.ganten.peanuts.common.enums.AeronStream;
 import com.ganten.peanuts.gateway.cache.OrderCache;
 import com.ganten.peanuts.protocol.aeron.AbstractAeronSubscriber;
-import com.ganten.peanuts.protocol.aeron.AeronProperties;
 import com.ganten.peanuts.protocol.codec.ExecutionReportCodec;
 import com.ganten.peanuts.protocol.model.ExecutionReportProto;
 
@@ -20,10 +19,8 @@ public class ExecutionReportSubscriber extends AbstractAeronSubscriber<Execution
 
     private final OrderCache orderCache;
 
-    public ExecutionReportSubscriber(
-            @Qualifier("executionReportAeronProperties") AeronProperties aeronProperties,
-            OrderCache orderCache) {
-        super(aeronProperties, ExecutionReportCodec.getInstance());
+    public ExecutionReportSubscriber(OrderCache orderCache) {
+        super(AeronStream.EXECUTION_REPORT.toProperties(), ExecutionReportCodec.getInstance());
         this.orderCache = orderCache;
     }
 

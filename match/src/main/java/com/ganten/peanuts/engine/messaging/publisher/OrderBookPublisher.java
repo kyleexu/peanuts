@@ -1,11 +1,10 @@
 package com.ganten.peanuts.engine.messaging.publisher;
 
 import org.springframework.stereotype.Component;
+import com.ganten.peanuts.common.enums.AeronStream;
 import com.ganten.peanuts.protocol.codec.OrderBookCodec;
 import com.ganten.peanuts.protocol.model.OrderBookProto;
 import com.ganten.peanuts.protocol.aeron.AbstractAeronPublisher;
-import com.ganten.peanuts.protocol.aeron.AeronProperties;
-import org.springframework.beans.factory.annotation.Qualifier;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -16,7 +15,7 @@ import lombok.extern.slf4j.Slf4j;
 @Component
 public class OrderBookPublisher extends AbstractAeronPublisher<OrderBookProto, OrderBookCodec> {
 
-    public OrderBookPublisher(@Qualifier("orderBookAeronProperties") AeronProperties properties) {
-        super(properties, OrderBookCodec.getInstance());
+    public OrderBookPublisher() {
+        super(AeronStream.ORDER_BOOK.toProperties(), OrderBookCodec.getInstance());
     }
 }

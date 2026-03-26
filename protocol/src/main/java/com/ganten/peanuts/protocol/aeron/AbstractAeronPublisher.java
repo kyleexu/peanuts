@@ -3,6 +3,7 @@ package com.ganten.peanuts.protocol.aeron;
 import javax.annotation.PostConstruct;
 import io.aeron.Publication;
 
+import com.ganten.peanuts.common.entity.AeronProperties;
 import com.ganten.peanuts.protocol.codec.AbstractCodec;
 import com.ganten.peanuts.protocol.model.AeronMessage;
 import io.aeron.Aeron;

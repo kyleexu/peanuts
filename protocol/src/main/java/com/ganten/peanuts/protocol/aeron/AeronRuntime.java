@@ -4,6 +4,8 @@ import java.io.File;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import com.ganten.peanuts.common.entity.AeronProperties;
+
 import io.aeron.Aeron;
 import io.aeron.driver.MediaDriver;
 import lombok.extern.slf4j.Slf4j;

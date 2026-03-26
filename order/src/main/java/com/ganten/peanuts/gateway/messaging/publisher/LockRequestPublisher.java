@@ -4,9 +4,8 @@ import java.util.concurrent.locks.LockSupport;
 
 import org.springframework.stereotype.Component;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Qualifier;
 
-import com.ganten.peanuts.protocol.aeron.AeronProperties;
+import com.ganten.peanuts.common.enums.AeronStream;
 import com.ganten.peanuts.protocol.model.AeronMessage;
 import com.ganten.peanuts.protocol.codec.LockRequestCodec;
 import com.ganten.peanuts.protocol.aeron.AbstractAeronPublisher;
@@ -20,9 +19,8 @@ import io.aeron.Publication;
 @Component
 public class LockRequestPublisher extends AbstractAeronPublisher<LockRequestProto, LockRequestCodec> {
 
-    public LockRequestPublisher(
-            @Qualifier("accountLockAeronRequestProperties") AeronProperties properties) {
-        super(properties, LockRequestCodec.getInstance());
+    public LockRequestPublisher() {
+        super(AeronStream.LOCK_REQUEST.toProperties(), LockRequestCodec.getInstance());
     }
 
     /**

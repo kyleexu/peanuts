@@ -1,7 +1,7 @@
-package com.ganten.peanuts.protocol.aeron;
+package com.ganten.peanuts.common.entity;
 
-import io.aeron.CommonContext;
-import com.ganten.peanuts.protocol.raft.RaftProperties;
+import com.ganten.peanuts.common.enums.RaftApplyMode;
+
 import lombok.Data;
 
 /**
@@ -13,16 +13,16 @@ import lombok.Data;
 @Data
 public class AeronProperties {
 
-    private boolean enabled = true;
-    private String channel = "aeron:ipc";
-    private int streamId = 0;
+    private boolean enabled;
+    private String channel;
+    private int streamId;
 
     // match uses embedded driver (kept for compatibility)
-    private boolean launchEmbeddedDriver = true;
-    private String directory = CommonContext.getAeronDirectoryName();
+    private boolean launchEmbeddedDriver;
+    private String directory;
 
     // Used by subscribers (match/market), harmless default elsewhere
-    private int fragmentLimit = 50;
+    private int fragmentLimit;
 
     // Raft properties (used by subscribers)
     private String raftDataPath;
@@ -31,12 +31,13 @@ public class AeronProperties {
     private String raftInitConf;
 
     /**
-     * 启用 Raft 时业务回调 {@link AbstractAeronSubscriber#onMessage} 的触发方式，见 {@link RaftApplyMode}。
+     * {@link RaftApplyMode}。
      */
-    private RaftApplyMode raftApplyMode = RaftApplyMode.AFTER_COMMIT;
+    private RaftApplyMode raftApplyMode;
 
     /**
-     * 将嵌套在 Aeron 配置中的 Raft 字段转为 {@link RaftProperties}，供 Subscriber 构建 {@code RaftBootstrap}。
+     * 将嵌套在 Aeron 配置中的 Raft 字段转为 {@link RaftProperties}，供 Subscriber 构建
+     * {@code RaftBootstrap}。
      */
     public RaftProperties toRaftProperties() {
         RaftProperties rp = new RaftProperties();

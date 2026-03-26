@@ -1,9 +1,9 @@
 package com.ganten.peanuts.engine.messaging.subscriber;
 
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
 import com.ganten.peanuts.common.entity.Order;
+import com.ganten.peanuts.common.enums.AeronStream;
 import com.ganten.peanuts.common.enums.Contract;
 import com.ganten.peanuts.engine.mapping.ProtocolModelMapper;
 import com.ganten.peanuts.engine.messaging.publisher.OrderBookPublisher;
@@ -14,7 +14,6 @@ import com.ganten.peanuts.protocol.codec.OrderCodec;
 import com.ganten.peanuts.protocol.model.OrderBookProto;
 import com.ganten.peanuts.protocol.model.OrderProto;
 import lombok.extern.slf4j.Slf4j;
-import com.ganten.peanuts.protocol.aeron.AeronProperties;
 
 @Slf4j
 @Component
@@ -23,9 +22,9 @@ public class OrderSubscriber extends AbstractAeronSubscriber<OrderProto, OrderCo
     private final OrderBookPublisher orderBookPublisher;
     private final MatchService matchService;
 
-    public OrderSubscriber(@Qualifier("orderAeronProperties") AeronProperties properties, OrderBookPublisher orderBookPublisher,
+    public OrderSubscriber(OrderBookPublisher orderBookPublisher,
             MatchService matchService) {
-        super(properties, OrderCodec.getInstance());
+        super(AeronStream.ORDER.toProperties(), OrderCodec.getInstance());
         this.orderBookPublisher = orderBookPublisher;
         this.matchService = matchService;
     }

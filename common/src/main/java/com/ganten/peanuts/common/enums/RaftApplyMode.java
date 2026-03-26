@@ -1,4 +1,4 @@
-package com.ganten.peanuts.protocol.aeron;
+package com.ganten.peanuts.common.enums;
 
 /**
  * 启用 Raft 时，子类 {@code onMessage}（内存业务）在何处执行。

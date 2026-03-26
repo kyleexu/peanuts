@@ -1,11 +1,10 @@
 package com.ganten.peanuts.market.messaging.subscriber;
 
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
+import com.ganten.peanuts.common.enums.AeronStream;
 import com.ganten.peanuts.market.service.OrderBookService;
 import com.ganten.peanuts.protocol.aeron.AbstractAeronSubscriber;
-import com.ganten.peanuts.protocol.aeron.AeronProperties;
 import com.ganten.peanuts.protocol.codec.OrderBookCodec;
 import com.ganten.peanuts.protocol.model.OrderBookProto;
 
@@ -17,9 +16,8 @@ public class OrderBookSubscriber extends AbstractAeronSubscriber<OrderBookProto,
 
     private final OrderBookService orderBookService;
 
-    public OrderBookSubscriber(@Qualifier("orderBookAeronProperties") AeronProperties aeronProperties,
-            OrderBookService orderBookService) {
-        super(aeronProperties, OrderBookCodec.getInstance());
+    public OrderBookSubscriber(OrderBookService orderBookService) {
+        super(AeronStream.ORDER_BOOK.toProperties(), OrderBookCodec.getInstance());
         this.orderBookService = orderBookService;
     }
 

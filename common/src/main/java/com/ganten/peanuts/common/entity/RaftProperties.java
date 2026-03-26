@@ -1,6 +1,6 @@
-package com.ganten.peanuts.protocol.raft;
+package com.ganten.peanuts.common.entity;
 
-import com.ganten.peanuts.protocol.aeron.RaftApplyMode;
+import com.ganten.peanuts.common.enums.RaftApplyMode;
 
 import lombok.Data;
 

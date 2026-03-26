@@ -13,6 +13,7 @@ import com.alipay.sofa.jraft.entity.Task;
 import com.alipay.sofa.jraft.option.NodeOptions;
 import com.alipay.sofa.jraft.rpc.RaftRpcServerFactory;
 import com.alipay.sofa.jraft.rpc.RpcServer;
+import com.ganten.peanuts.common.entity.RaftProperties;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;

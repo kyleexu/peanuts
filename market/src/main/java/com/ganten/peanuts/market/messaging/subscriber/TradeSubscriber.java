@@ -1,14 +1,13 @@
 package com.ganten.peanuts.market.messaging.subscriber;
 
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
 import com.ganten.peanuts.common.entity.Trade;
+import com.ganten.peanuts.common.enums.AeronStream;
 import com.ganten.peanuts.market.mapping.TradeProtocolMapper;
 import com.ganten.peanuts.market.service.CandleService;
 import com.ganten.peanuts.market.service.TickerService;
 import com.ganten.peanuts.protocol.aeron.AbstractAeronSubscriber;
-import com.ganten.peanuts.protocol.aeron.AeronProperties;
 import com.ganten.peanuts.protocol.codec.TradeCodec;
 import com.ganten.peanuts.protocol.model.TradeProto;
 
@@ -24,10 +23,9 @@ public class TradeSubscriber extends AbstractAeronSubscriber<TradeProto, TradeCo
     private final TickerService tickerService;
     private final CandleService candleService;
 
-    public TradeSubscriber(@Qualifier("tradeAeronProperties") AeronProperties aeronProperties,
-            TickerService tickerService,
+    public TradeSubscriber(TickerService tickerService,
             CandleService candleService) {
-        super(aeronProperties, TradeCodec.getInstance());
+        super(AeronStream.TRADE.toProperties(), TradeCodec.getInstance());
         this.tickerService = tickerService;
         this.candleService = candleService;
     }

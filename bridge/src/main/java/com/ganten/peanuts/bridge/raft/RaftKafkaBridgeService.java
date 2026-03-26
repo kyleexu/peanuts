@@ -14,9 +14,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ganten.peanuts.bridge.codec.CodecFactory;
 import com.ganten.peanuts.bridge.codec.CodecFactory.CodecSpec;
 import com.ganten.peanuts.bridge.config.RaftKafkaBridgeProperties;
+import com.ganten.peanuts.common.entity.RaftProperties;
 import com.ganten.peanuts.protocol.raft.CodecRaftStateMachine;
 import com.ganten.peanuts.protocol.raft.RaftBootstrap;
-import com.ganten.peanuts.protocol.raft.RaftProperties;
 
 import lombok.extern.slf4j.Slf4j;
 
