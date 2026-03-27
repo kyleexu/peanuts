@@ -5,13 +5,14 @@ maker:
   bybit:
     websocket:
       enabled: true
-      # Mainnet public linear ticker stream.
-      url: wss://stream.bybit.com/v5/public/linear
+      # Try endpoints in order; service auto-rotates when handshake/close fails.
+      urls: wss://stream.bybit.com/v5/public/linear,wss://stream.bytick.com/v5/public/linear
       symbols: BTCUSDT,ETHUSDT
       reconnect-delay-ms: 3000
   random-order:
     enabled: true
     fixed-delay-ms: 1000
+    # NOTE: in this environment, account service is reachable on IPv6 loopback.
     account-api-base-url: http://localhost:8081
     market-api-base-url: http://localhost:8082
     order-api-base-url: http://localhost:8080
@@ -24,3 +25,4 @@ maker:
     max-ladder-notional-usdt: 500
     overlap-levels: 2
     overlap-bps: 2
+    balance-warn-interval-ms: 30000

@@ -45,8 +45,10 @@ public class MakerOrderScheduler {
     private final BigDecimal maxLadderNotionalUsdt;
     private final int overlapLevels;
     private final BigDecimal overlapBps;
+    private final long balanceWarnIntervalMs;
     private final Map<Contract, BigDecimal> anchors = new ConcurrentHashMap<Contract, BigDecimal>();
     private final Map<String, BigDecimal> balanceCache = new ConcurrentHashMap<String, BigDecimal>();
+    private final Map<String, Long> balanceWarnAt = new ConcurrentHashMap<String, Long>();
     private final Map<Contract, List<LadderOrderRef>> liveLadderOrders =
             new ConcurrentHashMap<Contract, List<LadderOrderRef>>();
 
@@ -72,7 +74,8 @@ public class MakerOrderScheduler {
             @Value("${maker.random-order.min-ladder-notional-usdt:120}") BigDecimal minLadderNotionalUsdt,
             @Value("${maker.random-order.max-ladder-notional-usdt:400}") BigDecimal maxLadderNotionalUsdt,
             @Value("${maker.random-order.overlap-levels:2}") int overlapLevels,
-            @Value("${maker.random-order.overlap-bps:2}") BigDecimal overlapBps) {
+            @Value("${maker.random-order.overlap-bps:2}") BigDecimal overlapBps,
+            @Value("${maker.random-order.balance-warn-interval-ms:30000}") long balanceWarnIntervalMs) {
         this.accountClient = accountClient;
         this.orderClient = orderClient;
         this.tickerCache = tickerCache;
@@ -90,6 +93,7 @@ public class MakerOrderScheduler {
                 : maxLadderNotionalUsdt.max(this.minLadderNotionalUsdt);
         this.overlapLevels = Math.max(0, overlapLevels);
         this.overlapBps = overlapBps == null ? BigDecimal.valueOf(2) : overlapBps.max(BigDecimal.ZERO);
+        this.balanceWarnIntervalMs = Math.max(1000L, balanceWarnIntervalMs);
 
         anchors.put(Contract.BTC_USDT, BigDecimal.valueOf(45000));
         anchors.put(Contract.ETH_USDT, BigDecimal.valueOf(3000));
@@ -254,6 +258,8 @@ public class MakerOrderScheduler {
     }
 
     private void submitOrder(OrderSubmitRequest order) {
+        log.info("Submit ladder order. contract={}, side={}, price={}, quantity={}, userId={}",
+                order.getContract(), order.getSide(), order.getPrice(), order.getTotalQuantity(), order.getUserId());
         orderClient.submitOrder(order);
     }
 
@@ -320,9 +326,21 @@ public class MakerOrderScheduler {
             return value;
         }
         BigDecimal cached = balanceCache.get(key);
-        log.warn("Read account balance failed, fallback cache. userId={}, currency={}, cached={}",
-                userId, currency, cached);
+        if (shouldWarnBalanceFallback(key)) {
+            log.warn("Read account balance failed, fallback cache. userId={}, currency={}, cached={}",
+                    userId, currency, cached);
+        }
         return cached;
+    }
+
+    private boolean shouldWarnBalanceFallback(String cacheKey) {
+        long now = System.currentTimeMillis();
+        Long last = balanceWarnAt.get(cacheKey);
+        if (last == null || now - last.longValue() >= balanceWarnIntervalMs) {
+            balanceWarnAt.put(cacheKey, now);
+            return true;
+        }
+        return false;
     }
 
     private String cacheKey(long userId, Currency currency) {

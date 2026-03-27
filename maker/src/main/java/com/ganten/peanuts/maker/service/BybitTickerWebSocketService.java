@@ -4,11 +4,14 @@ import java.math.BigDecimal;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
@@ -16,6 +19,7 @@ import javax.annotation.PreDestroy;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.java_websocket.client.WebSocketClient;
+import org.java_websocket.drafts.Draft_6455;
 import org.java_websocket.enums.ReadyState;
 import org.java_websocket.handshake.ServerHandshake;
 import org.springframework.beans.factory.annotation.Value;
@@ -31,7 +35,7 @@ import lombok.extern.slf4j.Slf4j;
 public class BybitTickerWebSocketService {
 
     private final boolean enabled;
-    private final String websocketUrl;
+    private final List<String> websocketUrls;
     private final List<String> symbols;
     private final long reconnectDelayMs;
     private final TickerCache tickerCache;
@@ -39,18 +43,19 @@ public class BybitTickerWebSocketService {
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final ScheduledExecutorService reconnectExecutor = Executors.newSingleThreadScheduledExecutor();
     private final AtomicBoolean shutdown = new AtomicBoolean(false);
+    private final AtomicInteger endpointCursor = new AtomicInteger(0);
 
     private volatile WebSocketClient client;
 
     public BybitTickerWebSocketService(
             TickerCache tickerCache,
             @Value("${maker.bybit.websocket.enabled:true}") boolean enabled,
-            @Value("${maker.bybit.websocket.url:wss://stream.bybit.com/v5/public/linear}") String websocketUrl,
+            @Value("${maker.bybit.websocket.urls:wss://stream.bybit.com/v5/public/spot}") String websocketUrls,
             @Value("${maker.bybit.websocket.symbols:BTCUSDT,ETHUSDT}") String symbols,
             @Value("${maker.bybit.websocket.reconnect-delay-ms:3000}") long reconnectDelayMs) {
         this.tickerCache = tickerCache;
         this.enabled = enabled;
-        this.websocketUrl = websocketUrl;
+        this.websocketUrls = parseUrls(websocketUrls);
         this.symbols = parseSymbols(symbols);
         this.reconnectDelayMs = Math.max(500L, reconnectDelayMs);
     }
@@ -90,10 +95,12 @@ public class BybitTickerWebSocketService {
         }
 
         try {
-            this.client = new WebSocketClient(new URI(this.websocketUrl)) {
+            final String wsUrl = pickEndpointUrl();
+            this.client = new WebSocketClient(new URI(wsUrl), new Draft_6455(), defaultHeaders(), 10000) {
                 @Override
                 public void onOpen(ServerHandshake handshakedata) {
-                    log.info("Bybit websocket connected: {}", websocketUrl);
+                    log.info("Bybit websocket connected: {}", wsUrl);
+                    endpointCursor.set(0);
                     sendSubscribe();
                 }
 
@@ -104,18 +111,22 @@ public class BybitTickerWebSocketService {
 
                 @Override
                 public void onClose(int code, String reason, boolean remote) {
-                    log.warn("Bybit websocket closed. code={}, remote={}, reason={}", code, remote, reason);
+                    log.warn("Bybit websocket closed. url={}, code={}, remote={}, reason={}", wsUrl, code, remote,
+                            reason);
+                    rotateEndpoint();
                     scheduleReconnect();
                 }
 
                 @Override
                 public void onError(Exception ex) {
-                    log.warn("Bybit websocket error: {}", ex.getMessage());
+                    log.warn("Bybit websocket error. url={}, error={}", wsUrl, ex.getMessage());
                 }
             };
+            this.client.setConnectionLostTimeout(20);
             this.client.connect();
         } catch (Exception ex) {
             log.warn("Failed to connect Bybit websocket: {}", ex.getMessage());
+            rotateEndpoint();
             scheduleReconnect();
         }
     }
@@ -156,6 +167,7 @@ public class BybitTickerWebSocketService {
             JsonNode data = root.path("data");
             BigDecimal lastPrice = extractLastPrice(data);
             if (lastPrice != null && lastPrice.signum() > 0) {
+                log.info("Bybit ticker update. symbol={}, lastPrice={}", symbol, lastPrice);
                 tickerCache.putLastPrice(contract, lastPrice);
             }
         } catch (Exception ex) {
@@ -203,6 +215,13 @@ public class BybitTickerWebSocketService {
         return null;
     }
 
+    private Map<String, String> defaultHeaders() {
+        Map<String, String> headers = new HashMap<String, String>();
+        headers.put("Origin", "https://www.bybit.com");
+        headers.put("User-Agent", "peanuts-maker/1.0");
+        return headers;
+    }
+
     private List<String> parseSymbols(String raw) {
         if (raw == null || raw.trim().isEmpty()) {
             return Collections.emptyList();
@@ -216,6 +235,33 @@ public class BybitTickerWebSocketService {
             }
         }
         return parsed;
+    }
+
+    private List<String> parseUrls(String raw) {
+        if (raw == null || raw.trim().isEmpty()) {
+            return Collections.singletonList("wss://stream.bybit.com/v5/public/linear");
+        }
+        String[] parts = raw.split(",");
+        List<String> parsed = new ArrayList<String>(parts.length);
+        for (String part : parts) {
+            String value = part == null ? null : part.trim();
+            if (value != null && !value.isEmpty()) {
+                parsed.add(value);
+            }
+        }
+        if (parsed.isEmpty()) {
+            parsed.add("wss://stream.bybit.com/v5/public/linear");
+        }
+        return parsed;
+    }
+
+    private String pickEndpointUrl() {
+        int idx = Math.floorMod(endpointCursor.get(), websocketUrls.size());
+        return websocketUrls.get(idx);
+    }
+
+    private void rotateEndpoint() {
+        endpointCursor.incrementAndGet();
     }
 
     private void scheduleReconnect() {
