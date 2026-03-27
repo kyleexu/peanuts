@@ -1,6 +1,5 @@
 package com.ganten.peanuts.market.websocket;
 
-import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -109,9 +108,13 @@ public class MarketDataWebSocketHandler extends TextWebSocketHandler {
         for (WebSocketSession session : sessions.values()) {
             try {
                 if (session.isOpen() && isSessionSubscribed(session.getId(), messageTopics)) {
-                    session.sendMessage(textMessage);
+                    synchronized (session) {
+                        if (session.isOpen()) {
+                            session.sendMessage(textMessage);
+                        }
+                    }
                 }
-            } catch (IOException e) {
+            } catch (Exception e) {
                 log.warn("Failed to send message to client {}: {}", session.getId(), e.getMessage());
                 failedSessions.add(session.getId());
             }

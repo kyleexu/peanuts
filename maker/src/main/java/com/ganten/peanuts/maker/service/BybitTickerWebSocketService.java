@@ -167,7 +167,6 @@ public class BybitTickerWebSocketService {
             JsonNode data = root.path("data");
             BigDecimal lastPrice = extractLastPrice(data);
             if (lastPrice != null && lastPrice.signum() > 0) {
-                log.info("Bybit ticker update. symbol={}, lastPrice={}", symbol, lastPrice);
                 tickerCache.putLastPrice(contract, lastPrice);
             }
         } catch (Exception ex) {

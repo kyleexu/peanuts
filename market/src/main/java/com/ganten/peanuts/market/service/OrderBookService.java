@@ -36,7 +36,6 @@ public class OrderBookService {
         if (snapshot == null || snapshot.getContract() == null) {
             return;
         }
-        log.info("onOrderBook: {}", snapshot);
 
         /**
          * 第 12 步，将订单簿快照存储到 rawSnapshots 中，用于后续的订单簿聚合

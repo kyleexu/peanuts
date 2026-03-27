@@ -4,23 +4,19 @@ import java.math.BigDecimal;
 import java.util.EnumMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-
 import javax.annotation.PostConstruct;
 import javax.xml.XMLConstants;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
-
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.NodeList;
-
 import com.ganten.peanuts.common.entity.AccountAssetSnapshot;
 import com.ganten.peanuts.common.enums.Currency;
 import com.ganten.peanuts.common.util.DecimalLogFormatter;
-
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -53,9 +49,8 @@ public class AccountCache {
 				Currency currency = Currency.valueOf(node.getAttribute("currency"));
 				BigDecimal available = new BigDecimal(node.getAttribute("available"));
 				String lockedAttr = node.getAttribute("locked");
-				BigDecimal locked = lockedAttr == null || lockedAttr.isEmpty()
-						? BigDecimal.ZERO
-						: new BigDecimal(lockedAttr);
+				BigDecimal locked =
+						lockedAttr == null || lockedAttr.isEmpty() ? BigDecimal.ZERO : new BigDecimal(lockedAttr);
 				increaseAvailable(userId, currency, available);
 				if (locked.signum() > 0) {
 					UserBalance userBalance = getOrCreateBalance(userId);
@@ -108,11 +103,6 @@ public class AccountCache {
 			}
 			userBalance.available.put(normalizedCurrency, available.subtract(amount));
 			userBalance.locked.put(normalizedCurrency, locked.add(amount));
-			log.info(
-					"lock success, userId={}, currency={}, lockAmount={}, availableBefore={}, availableAfter={}, lockedBefore={}, lockedAfter={}",
-					userId, normalizedCurrency, DecimalLogFormatter.p4(amount), DecimalLogFormatter.p4(available),
-					DecimalLogFormatter.p4(available.subtract(amount)), DecimalLogFormatter.p4(locked),
-					DecimalLogFormatter.p4(locked.add(amount)));
 			return true;
 		}
 	}
@@ -184,9 +174,6 @@ public class AccountCache {
 		UserBalance sell = getOrCreateBalance(sellUserId);
 		UserBalance first = buyUserId <= sellUserId ? buy : sell;
 		UserBalance second = buyUserId <= sellUserId ? sell : buy;
-		log.info("settleTrade, buyUserId={}, sellUserId={}, baseCurrency={}, quoteCurrency={}, price={}, quantity={}",
-				buyUserId, sellUserId, baseCurrency, quoteCurrency, DecimalLogFormatter.p4(price),
-				DecimalLogFormatter.p4(quantity));
 		synchronized (first) {
 			synchronized (second) {
 				BigDecimal buyLockedQuote = buy.locked.getOrDefault(quote, BigDecimal.ZERO);
@@ -197,14 +184,10 @@ public class AccountCache {
 
 				buy.locked.put(quote, buyLockedQuote.subtract(notional));
 				BigDecimal buyAvailableBase = buy.available.getOrDefault(base, BigDecimal.ZERO);
-				log.info("buyUserId={}, buyAvailableBase={}, quantity={}", buyUserId,
-						DecimalLogFormatter.p4(buyAvailableBase), DecimalLogFormatter.p4(quantity));
 				buy.available.put(base, buyAvailableBase.add(quantity));
 
 				sell.locked.put(base, sellLockedBase.subtract(quantity));
 				BigDecimal sellAvailableQuote = sell.available.getOrDefault(quote, BigDecimal.ZERO);
-				log.info("sellUserId={}, sellAvailableQuote={}, notional={}", sellUserId,
-						DecimalLogFormatter.p4(sellAvailableQuote), DecimalLogFormatter.p4(notional));
 				sell.available.put(quote, sellAvailableQuote.add(notional));
 				return true;
 			}

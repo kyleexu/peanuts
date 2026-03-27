@@ -4,8 +4,65 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 LOG_DIR="$ROOT_DIR/logs"
 RUN_DIR="$ROOT_DIR/run"
+LOG_LEVEL="${LOG_LEVEL:-info}"
+
+usage() {
+  cat <<'EOF'
+Usage: ./start-core.sh [--log-level <level>]
+
+Options:
+  -l, --log-level    Log level for all started services.
+                     Supported: trace, debug, info, warn, error, off
+                     Default: info
+  -h, --help         Show this help message
+EOF
+}
+
+normalize_log_level() {
+  local value="$1"
+  echo "$value" | tr '[:upper:]' '[:lower:]'
+}
+
+validate_log_level() {
+  local value="$1"
+  case "$value" in
+    trace|debug|info|warn|error|off) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -l|--log-level)
+      if [[ $# -lt 2 ]]; then
+        echo "ERROR: Missing value for $1"
+        usage
+        exit 1
+      fi
+      LOG_LEVEL="$(normalize_log_level "$2")"
+      shift 2
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "ERROR: Unknown argument: $1"
+      usage
+      exit 1
+      ;;
+  esac
+done
+
+if ! validate_log_level "$LOG_LEVEL"; then
+  echo "ERROR: Unsupported log level: $LOG_LEVEL"
+  usage
+  exit 1
+fi
 
 mkdir -p "$LOG_DIR" "$RUN_DIR"
+
+echo "Using log level: $LOG_LEVEL"
 
 echo "[0/7] Stopping existing services (for restart)"
 if [[ -x "$ROOT_DIR/stop-core.sh" ]]; then
@@ -40,8 +97,8 @@ start_service() {
     fi
   fi
 
-  echo "Starting $name ..."
-  nohup java -jar "$jar_path" >"$log_file" 2>&1 &
+  echo "Starting $name (log level=$LOG_LEVEL) ..."
+  nohup java -jar "$jar_path" --logging.level.root="$LOG_LEVEL" >"$log_file" 2>&1 &
   local new_pid=$!
   echo "$new_pid" >"$pid_file"
   echo "$name started (pid=$new_pid), log=$log_file"

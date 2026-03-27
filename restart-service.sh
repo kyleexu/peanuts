@@ -4,10 +4,11 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 LOG_DIR="$ROOT_DIR/logs"
 RUN_DIR="$ROOT_DIR/run"
+LOG_LEVEL="${LOG_LEVEL:-info}"
 
 usage() {
   cat <<'EOF'
-Usage: ./restart-service.sh <service>
+Usage: ./restart-service.sh <service> [--log-level <level>]
 
 Supported services:
   driver
@@ -17,9 +18,29 @@ Supported services:
   market
   maker
 
+Options:
+  -l, --log-level    Log level for the restarted service.
+                     Supported: trace, debug, info, warn, error, off
+                     Default: info
+  -h, --help         Show this help message
+
 Example:
   ./restart-service.sh market
+  ./restart-service.sh market --log-level debug
 EOF
+}
+
+normalize_log_level() {
+  local value="$1"
+  echo "$value" | tr '[:upper:]' '[:lower:]'
+}
+
+validate_log_level() {
+  local value="$1"
+  case "$value" in
+    trace|debug|info|warn|error|off) return 0 ;;
+    *) return 1 ;;
+  esac
 }
 
 jar_path_for_service() {
@@ -88,8 +109,8 @@ start_service() {
     exit 1
   fi
 
-  echo "Starting $name ..."
-  nohup java -jar "$jar_path" >"$log_file" 2>&1 &
+  echo "Starting $name (log level=$LOG_LEVEL) ..."
+  nohup java -jar "$jar_path" --logging.level.root="$LOG_LEVEL" >"$log_file" 2>&1 &
   local new_pid=$!
   echo "$new_pid" >"$pid_file"
   echo "$name started (pid=$new_pid), log=$log_file"
@@ -125,8 +146,43 @@ check_service_health() {
   echo "Health check passed: $name"
 }
 
-SERVICE="${1:-}"
-if [[ -z "$SERVICE" || "$SERVICE" == "-h" || "$SERVICE" == "--help" ]]; then
+SERVICE=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -l|--log-level)
+      if [[ $# -lt 2 ]]; then
+        echo "ERROR: Missing value for $1"
+        usage
+        exit 1
+      fi
+      LOG_LEVEL="$(normalize_log_level "$2")"
+      shift 2
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      if [[ -z "$SERVICE" ]]; then
+        SERVICE="$1"
+        shift
+      else
+        echo "ERROR: Unknown argument: $1"
+        usage
+        exit 1
+      fi
+      ;;
+  esac
+done
+
+if [[ -z "$SERVICE" ]]; then
+  usage
+  exit 1
+fi
+
+if ! validate_log_level "$LOG_LEVEL"; then
+  echo "ERROR: Unsupported log level: $LOG_LEVEL"
   usage
   exit 1
 fi
@@ -139,7 +195,7 @@ if ! JAR_PATH="$(jar_path_for_service "$SERVICE")"; then
   exit 1
 fi
 
-echo "Restarting service: $SERVICE"
+echo "Restarting service: $SERVICE (log level=$LOG_LEVEL)"
 stop_service "$SERVICE"
 start_service "$SERVICE" "$JAR_PATH"
 check_service_health "$SERVICE" 20

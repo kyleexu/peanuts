@@ -5,14 +5,9 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.concurrent.atomic.AtomicLong;
-
 import org.springframework.stereotype.Service;
-
 import com.ganten.peanuts.common.entity.Order;
-import com.ganten.peanuts.common.enums.Contract;
-import com.ganten.peanuts.common.enums.OrderAction;
-import com.ganten.peanuts.common.enums.OrderStatus;
-import com.ganten.peanuts.common.enums.Side;
+import com.ganten.peanuts.common.enums.*;
 import com.ganten.peanuts.common.util.DecimalLogFormatter;
 import com.ganten.peanuts.engine.messaging.publisher.ExecutionReportPublisher;
 import com.ganten.peanuts.engine.messaging.publisher.TradePublisher;
@@ -20,7 +15,6 @@ import com.ganten.peanuts.engine.model.OrderBook;
 import com.ganten.peanuts.engine.utils.ExecutionReportBuilder;
 import com.ganten.peanuts.protocol.model.ExecutionReportProto;
 import com.ganten.peanuts.protocol.model.TradeProto;
-
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -74,27 +68,11 @@ public class MatchService {
     }
 
     private void newOrder(Order incomingOrder) {
-        log.info(
-                "新订单到达, orderId={}, userId={}, contract={}, side={}, type={}, tif={}, action={}, status={}, price={}, totalQty={}, filledQty={}, remainingQty={}, targetOrderId={}, ts={}",
-                incomingOrder.getOrderId(),
-                incomingOrder.getUserId(),
-                incomingOrder.getContract(),
-                incomingOrder.getSide(),
-                incomingOrder.getOrderType(),
-                incomingOrder.getTimeInForce(),
-                incomingOrder.getAction(),
-                incomingOrder.getOrderStatus(),
-                DecimalLogFormatter.p4(incomingOrder.getPrice()),
-                DecimalLogFormatter.p4(incomingOrder.getTotalQuantity()),
-                DecimalLogFormatter.p4(incomingOrder.getFilledQuantity()),
-                DecimalLogFormatter.p4(remaining(incomingOrder)),
-                incomingOrder.getTargetOrderId(),
-                incomingOrder.getTimestamp());
         OrderBook book = this.orderBook(incomingOrder.getContract());
 
         // 获取相反方向的订单队列
-        PriorityQueue<Order> oppositeQueue = incomingOrder.getSide() == Side.BUY ? book.getSellOrders()
-                : book.getBuyOrders();
+        PriorityQueue<Order> oppositeQueue =
+                incomingOrder.getSide() == Side.BUY ? book.getSellOrders() : book.getBuyOrders();
 
         // 撮合
         while (!oppositeQueue.isEmpty() && remaining(incomingOrder).compareTo(BigDecimal.ZERO) > 0) {
@@ -109,8 +87,6 @@ public class MatchService {
             BigDecimal matchedQuantity = remaining(incomingOrder).min(remaining(restingOrder));
             // 成交价格为待成交订单的价格
             BigDecimal matchedPrice = restingOrder.getPrice();
-            log.info("订单成交, 新订单: {}, 待成交订单: {}, 成交数量: {}, 成交价格: {}", incomingOrder.getOrderId(),
-                    restingOrder.getOrderId(), DecimalLogFormatter.p4(matchedQuantity), DecimalLogFormatter.p4(matchedPrice));
             // 填充新订单和待成交订单
             this.updateFilledQuantity(incomingOrder, matchedQuantity);
             this.updateFilledQuantity(restingOrder, matchedQuantity);
@@ -126,6 +102,14 @@ public class MatchService {
         }
 
         if (remaining(incomingOrder).compareTo(BigDecimal.ZERO) > 0) {
+            if (!shouldRestOnBook(incomingOrder)) {
+                if (incomingOrder.getFilledQuantity().compareTo(BigDecimal.ZERO) > 0) {
+                    incomingOrder.setOrderStatus(OrderStatus.PARTIALLY_FILLED);
+                } else {
+                    incomingOrder.setOrderStatus(OrderStatus.CANCELED);
+                }
+                return;
+            }
             if (incomingOrder.getFilledQuantity().compareTo(BigDecimal.ZERO) > 0) {
                 // 如果新来的订单有已成交数量，则将订单状态设置为部分成交
                 incomingOrder.setOrderStatus(OrderStatus.PARTIALLY_FILLED);
@@ -170,12 +154,9 @@ public class MatchService {
         /**
          * 发布交易
          */
-        log.info("发布交易, tradeId={}, buyOrderId={}, sellOrderId={}, price={}, quantity={}, ts={}", tradeId,
-                trade.getBuyOrderId(),
-                trade.getSellOrderId(),
-                DecimalLogFormatter.p4(matchedPrice),
-                DecimalLogFormatter.p4(matchedQuantity),
-                System.currentTimeMillis());
+        log.info("publish trade record, tradeId={}, buyOrderId={}, sellOrderId={}, price={}, quantity={}, ts={}",
+                tradeId, trade.getBuyOrderId(), trade.getSellOrderId(), DecimalLogFormatter.p4(matchedPrice),
+                DecimalLogFormatter.p4(matchedQuantity), System.currentTimeMillis());
         tradePublisher.offer(trade);
 
         /**
@@ -184,21 +165,11 @@ public class MatchService {
          * 一条是卖出订单的执行报告
          * 两条交易执行报告的 tradeId 相同
          */
-        ExecutionReportProto buyReport = ExecutionReportBuilder.buildTradeReport(
-                incomingOrder,
-                trade.getBuyOrderId(),
-                trade.getSellOrderId(),
-                matchedPrice,
-                matchedQuantity,
-                tradeId);
+        ExecutionReportProto buyReport = ExecutionReportBuilder.buildTradeReport(incomingOrder, trade.getBuyOrderId(),
+                trade.getSellOrderId(), matchedPrice, matchedQuantity, tradeId);
         executionReportPublisher.offer(buyReport);
-        ExecutionReportProto sellReport = ExecutionReportBuilder.buildTradeReport(
-                restingOrder,
-                trade.getBuyOrderId(),
-                trade.getSellOrderId(),
-                matchedPrice,
-                matchedQuantity,
-                tradeId);
+        ExecutionReportProto sellReport = ExecutionReportBuilder.buildTradeReport(restingOrder, trade.getBuyOrderId(),
+                trade.getSellOrderId(), matchedPrice, matchedQuantity, tradeId);
         executionReportPublisher.offer(sellReport);
     }
 
@@ -266,6 +237,9 @@ public class MatchService {
     }
 
     private boolean isCrossed(Order incomingOrder, Order restingOrder) {
+        if (incomingOrder.getOrderType() == OrderType.MARKET) {
+            return true;
+        }
         if (incomingOrder.getPrice() == null || restingOrder.getPrice() == null) {
             return false;
         }
@@ -273,6 +247,13 @@ public class MatchService {
             return incomingOrder.getPrice().compareTo(restingOrder.getPrice()) >= 0;
         }
         return incomingOrder.getPrice().compareTo(restingOrder.getPrice()) <= 0;
+    }
+
+    private boolean shouldRestOnBook(Order order) {
+        if (order.getOrderType() == OrderType.MARKET) {
+            return false;
+        }
+        return order.getTimeInForce() != TimeInForce.IOC && order.getTimeInForce() != TimeInForce.FOK;
     }
 
     private BigDecimal remaining(Order order) {

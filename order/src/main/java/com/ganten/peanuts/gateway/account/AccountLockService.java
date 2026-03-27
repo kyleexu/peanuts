@@ -34,8 +34,7 @@ public class AccountLockService {
     private final AtomicLong requestIdGenerator = new AtomicLong(1L);
     private final long lockTimeoutMs;
 
-    public AccountLockService(LockPendingRequests lockPendingRequests,
-            LockRequestPublisher requestPublisher,
+    public AccountLockService(LockPendingRequests lockPendingRequests, LockRequestPublisher requestPublisher,
             @Value("${gateway.account-lock.timeout-ms:" + Constants.ACCOUNT_LOCK_TIMEOUT_MS + "}") long lockTimeoutMs) {
         this.lockPendingRequests = lockPendingRequests;
         this.requestPublisher = requestPublisher;
@@ -48,18 +47,15 @@ public class AccountLockService {
      */
     public LockResponseProto checkAndLock(Order order) {
         long requestId = requestIdGenerator.getAndIncrement();
-        LockRequestProto request = LockRequestProtocolMapper.toLockRequest(
-                order, requestId, System.currentTimeMillis());
-        log.info("Lock request dispatch, requestId={}, userId={}, currency={}, amount={}, orderId={}",
-                requestId, request.getUserId(), request.getCurrency(), request.getAmount(), order.getOrderId());
+        LockRequestProto request =
+                LockRequestProtocolMapper.toLockRequest(order, requestId, System.currentTimeMillis());
         CompletableFuture<LockResponseProto> future = lockPendingRequests.put(requestId);
         LockResponseProto response;
         try {
             boolean offered = requestPublisher.offerWithRetry(request);
             if (!offered) {
                 lockPendingRequests.remove(requestId);
-                return LockRequestProtocolMapper.toFailureResponse(
-                        requestId, "account lock request publish failed");
+                return LockRequestProtocolMapper.toFailureResponse(requestId, "account lock request publish failed");
             }
             /**
              * 第 6 步，等待锁响应，拿到锁响应结果后
@@ -67,7 +63,6 @@ public class AccountLockService {
              */
             response = future.get(lockTimeoutMs, TimeUnit.MILLISECONDS);
         } catch (TimeoutException ex) {
-            log.warn("Lock request timeout, requestId={}, timeoutMs={}, request={}", requestId, lockTimeoutMs, request);
             lockPendingRequests.remove(requestId);
             response = LockRequestProtocolMapper.toFailureResponse(requestId,
                     "account lock request timeout, timeoutMs=" + lockTimeoutMs);
@@ -77,8 +72,8 @@ public class AccountLockService {
             lockPendingRequests.remove(requestId);
             response = LockRequestProtocolMapper.toFailureResponse(requestId,
                     "account lock request timeout or failed: " + ex.getMessage());
+            log.info("Lock request exception", ex);
         }
-        log.info("Lock request completed, requestId={}, response={}", requestId, response);
         return response;
     }
 }

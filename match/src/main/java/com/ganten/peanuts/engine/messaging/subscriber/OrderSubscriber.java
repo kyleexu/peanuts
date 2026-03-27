@@ -1,7 +1,6 @@
 package com.ganten.peanuts.engine.messaging.subscriber;
 
 import org.springframework.stereotype.Component;
-
 import com.ganten.peanuts.common.entity.Order;
 import com.ganten.peanuts.common.enums.AeronStream;
 import com.ganten.peanuts.common.enums.Contract;
@@ -22,8 +21,7 @@ public class OrderSubscriber extends AbstractAeronSubscriber<OrderProto, OrderCo
     private final OrderBookPublisher orderBookPublisher;
     private final MatchService matchService;
 
-    public OrderSubscriber(OrderBookPublisher orderBookPublisher,
-            MatchService matchService) {
+    public OrderSubscriber(OrderBookPublisher orderBookPublisher, MatchService matchService) {
         super(AeronStream.ORDER.toProperties(), OrderCodec.getInstance());
         this.orderBookPublisher = orderBookPublisher;
         this.matchService = matchService;
@@ -36,7 +34,6 @@ public class OrderSubscriber extends AbstractAeronSubscriber<OrderProto, OrderCo
     @Override
     protected void onMessage(OrderProto command) {
         Order order = ProtocolModelMapper.toDomainOrder(command);
-        log.info("Order received, orderId={}, userId={}", order.getOrderId(), order.getUserId());
         matchService.match(order);
         this.publishOrderBook(order.getContract());
     }

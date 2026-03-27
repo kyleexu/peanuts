@@ -2,13 +2,11 @@ package com.ganten.peanuts.maker.client;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
-
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ganten.peanuts.common.enums.Contract;
 
 @Component
@@ -18,21 +16,22 @@ public class MarketClient {
     private final RestTemplate restTemplate = new RestTemplate();
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    public MarketClient(@Value("${maker.random-order.market-api-base-url:http://localhost:8082}") String marketApiBaseUrl) {
+    public MarketClient(
+            @Value("${maker.random-order.market-api-base-url:http://localhost:8082}") String marketApiBaseUrl) {
         this.marketApiBaseUrl = marketApiBaseUrl;
     }
 
     public BigDecimal resolvePriceByTicker(Contract contract, int orderBookLevel) {
         try {
             BigDecimal lastPrice = fetchTickerLastPrice(contract);
-            TopOfBook top = fetchTopOfBook(contract, Math.max(1, orderBookLevel));
+            TopOfBookSnapshot top = fetchTopOfBook(contract, Math.max(1, orderBookLevel));
 
-            if (isPositive(top.bid1Price) && isPositive(top.ask1Price)) {
-                BigDecimal midPrice = top.bid1Price.add(top.ask1Price)
-                        .divide(BigDecimal.valueOf(2), 4, RoundingMode.HALF_UP);
+            if (isPositive(top.bestBid) && isPositive(top.bestAsk)) {
+                BigDecimal midPrice =
+                        top.bestBid.add(top.bestAsk).divide(BigDecimal.valueOf(2), 4, RoundingMode.HALF_UP);
                 if (isPositive(lastPrice)) {
                     // Align with Bybit ticker semantics: bid1/ask1 are primary, lastPrice is trade anchor.
-                    if (lastPrice.compareTo(top.bid1Price) >= 0 && lastPrice.compareTo(top.ask1Price) <= 0) {
+                    if (lastPrice.compareTo(top.bestBid) >= 0 && lastPrice.compareTo(top.bestAsk) <= 0) {
                         return lastPrice.setScale(4, RoundingMode.HALF_UP);
                     }
                     return lastPrice.add(midPrice).divide(BigDecimal.valueOf(2), 4, RoundingMode.HALF_UP);
@@ -44,15 +43,33 @@ public class MarketClient {
                 return lastPrice.setScale(4, RoundingMode.HALF_UP);
             }
 
-            if (isPositive(top.ask1Price)) {
-                return top.ask1Price.setScale(4, RoundingMode.HALF_UP);
+            if (isPositive(top.bestAsk)) {
+                return top.bestAsk.setScale(4, RoundingMode.HALF_UP);
             }
-            if (isPositive(top.bid1Price)) {
-                return top.bid1Price.setScale(4, RoundingMode.HALF_UP);
+            if (isPositive(top.bestBid)) {
+                return top.bestBid.setScale(4, RoundingMode.HALF_UP);
             }
             return null;
         } catch (Exception ex) {
             return null;
+        }
+    }
+
+    public TopOfBookSnapshot fetchTopOfBook(Contract contract, int orderBookLevel) {
+        TopOfBookSnapshot top = new TopOfBookSnapshot();
+        try {
+            String url = String.format("%s/api/market/orderbook/%s?level=%d", this.marketApiBaseUrl, contract.name(),
+                    Math.max(1, orderBookLevel));
+            String body = restTemplate.getForObject(url, String.class);
+            if (body == null || body.isEmpty()) {
+                return top;
+            }
+            JsonNode root = objectMapper.readTree(body);
+            top.bestBid = firstPrice(root.path("bids"));
+            top.bestAsk = firstPrice(root.path("asks"));
+            return top;
+        } catch (Exception ex) {
+            return top;
         }
     }
 
@@ -71,24 +88,6 @@ public class MarketClient {
             return new BigDecimal(lastPriceNode.asText("0"));
         } catch (Exception ex) {
             return null;
-        }
-    }
-
-    private TopOfBook fetchTopOfBook(Contract contract, int orderBookLevel) {
-        TopOfBook top = new TopOfBook();
-        try {
-            String url = String.format("%s/api/market/orderbook/%s?level=%d", this.marketApiBaseUrl,
-                    contract.name(), orderBookLevel);
-            String body = restTemplate.getForObject(url, String.class);
-            if (body == null || body.isEmpty()) {
-                return top;
-            }
-            JsonNode root = objectMapper.readTree(body);
-            top.bid1Price = firstPrice(root.path("bids"));
-            top.ask1Price = firstPrice(root.path("asks"));
-            return top;
-        } catch (Exception ex) {
-            return top;
         }
     }
 
@@ -111,8 +110,16 @@ public class MarketClient {
         return new BigDecimal(priceNode.asText("0"));
     }
 
-    private static final class TopOfBook {
-        private BigDecimal bid1Price;
-        private BigDecimal ask1Price;
+    public static final class TopOfBookSnapshot {
+        private BigDecimal bestBid;
+        private BigDecimal bestAsk;
+
+        public BigDecimal getBestBid() {
+            return bestBid;
+        }
+
+        public BigDecimal getBestAsk() {
+            return bestAsk;
+        }
     }
 }

@@ -37,16 +37,11 @@ public class LockRequestSubscriber extends AbstractAeronSubscriber<LockRequestPr
 
     @Override
     protected void onMessage(LockRequestProto message) {
-        log.info("Lock request received, requestId={}, userId={}, currency={}, amount={}",
-                message.getRequestId(), message.getUserId(), message.getCurrency(), message.getAmount());
         boolean success = accountService.tryLock(message.getUserId(), message.getCurrency(), message.getAmount());
-        log.info("Lock request completed, requestId={}, request={}, success={}", message.getRequestId(), message,
-                success);
         LockResponseProto lockResponseProto = new LockResponseProto();
         lockResponseProto.setRequestId(message.getRequestId());
         lockResponseProto.setSuccess(success);
         lockResponseProto.setMessage(success ? "Lock request successful" : "Lock request failed");
-        log.info("Lock response, response={}", lockResponseProto);
         lockResponsePublisher.offer(lockResponseProto);
     }
 }
