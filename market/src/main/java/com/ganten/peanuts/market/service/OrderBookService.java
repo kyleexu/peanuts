@@ -13,7 +13,6 @@ import com.ganten.peanuts.market.model.OrderBookSnapshot;
 import com.ganten.peanuts.market.websocket.WebSocketBroadcaster;
 import com.ganten.peanuts.protocol.model.OrderBookProto;
 import com.ganten.peanuts.protocol.model.OrderBookProto.OrderSnapshot;
-
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -22,8 +21,7 @@ public class OrderBookService {
 
     private static final int DEFAULT_LEVEL = 1;
 
-    private final Map<Contract, OrderBookProto> rawSnapshots =
-            new ConcurrentHashMap<Contract, OrderBookProto>();
+    private final Map<Contract, OrderBookProto> rawSnapshots = new ConcurrentHashMap<Contract, OrderBookProto>();
     private final Map<String, OrderBookSnapshot> snapshotsByLevel = new ConcurrentHashMap<String, OrderBookSnapshot>();
     private final WebSocketBroadcaster webSocketBroadcaster;
 
@@ -57,12 +55,14 @@ public class OrderBookService {
         }
 
         /**
-         * 第 14 步，将默认级别的订单簿快照推送到 WebSocket 客户端。
-         * 关键: 这里需要使用 webSocketBroadcaster 推送订单簿快照
+         * 第 14 步，将所有聚合级别的订单簿快照推送到 WebSocket 客户端。
+         * 这样客户端可按 orderbook.<multiplier> 精确订阅。
          */
-        OrderBookSnapshot defaultSnapshot = snapshotsByLevel.get(key(snapshot.getContract(), DEFAULT_LEVEL));
-        if (defaultSnapshot != null) {
-            webSocketBroadcaster.send(MarketMessage.ofOrderBook(defaultSnapshot));
+        for (int levelMultiplier : Constants.multiplierList) {
+            OrderBookSnapshot levelSnapshot = snapshotsByLevel.get(key(snapshot.getContract(), levelMultiplier));
+            if (levelSnapshot != null) {
+                webSocketBroadcaster.send(MarketMessage.ofOrderBook(levelSnapshot));
+            }
         }
     }
 

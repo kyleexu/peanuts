@@ -37,7 +37,7 @@ public class MarketDataWebSocketHandler extends TextWebSocketHandler {
     @Override
     public void afterConnectionEstablished(WebSocketSession session) throws Exception {
         sessions.put(session.getId(), session);
-        sessionTopics.put(session.getId(), defaultTopics());
+        sessionTopics.put(session.getId(), Collections.synchronizedSet(new HashSet<>()));
         log.info("WebSocket connected, client: {}", session.getId());
     }
 
@@ -130,15 +130,6 @@ public class MarketDataWebSocketHandler extends TextWebSocketHandler {
         return sessions.size();
     }
 
-    private Set<String> defaultTopics() {
-        Set<String> defaults = new HashSet<>();
-        defaults.add(TOPIC_TICKER);
-        defaults.add(TOPIC_CANDLE);
-        defaults.add(TOPIC_ORDERBOOK);
-        defaults.add(TOPIC_TRADE);
-        return Collections.synchronizedSet(defaults);
-    }
-
     private Set<String> parseTopics(JsonNode root) {
         Set<String> topics = new HashSet<>();
 
@@ -174,9 +165,6 @@ public class MarketDataWebSocketHandler extends TextWebSocketHandler {
         Set<String> subscriptions = sessionTopics.get(sessionId);
         if (subscriptions != null) {
             subscriptions.removeAll(topics);
-            if (subscriptions.isEmpty()) {
-                subscriptions.addAll(defaultTopics());
-            }
             log.debug("Client {} unsubscribed topics {}", sessionId, topics);
         }
     }
@@ -184,7 +172,7 @@ public class MarketDataWebSocketHandler extends TextWebSocketHandler {
     private boolean isSessionSubscribed(String sessionId, Set<String> messageTopics) {
         Set<String> subscriptions = sessionTopics.get(sessionId);
         if (subscriptions == null || subscriptions.isEmpty()) {
-            return true;
+            return false;
         }
 
         for (String topic : messageTopics) {
