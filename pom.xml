@@ -11,6 +11,7 @@
         <module>protocol</module>
         <module>market</module>
         <module>match</module>
+        <module>maker</module>
         <module>order</module>
         <module>test</module>
         <module>monitor</module>
@@ -49,7 +50,8 @@
 
     <packaging>pom</packaging>
 
-    <!-- 显式声明 Maven Central（HTTPS）。若本机 settings.xml 中 mirrorOf=* 仍指向内网，需为 central 配置 mirrorOf 例外或单独 mirror。 -->
+    <!-- 显式声明 Maven Central（HTTPS）。若本机 settings.xml 中 mirrorOf=* 仍指向内网，需为 central 配置 mirrorOf 例外或单独
+    mirror。 -->
     <repositories>
         <repository>
             <id>central</id>

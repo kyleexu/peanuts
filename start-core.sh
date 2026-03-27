@@ -7,17 +7,17 @@ RUN_DIR="$ROOT_DIR/run"
 
 mkdir -p "$LOG_DIR" "$RUN_DIR"
 
-echo "[0/6] Stopping existing services (for restart)"
+echo "[0/7] Stopping existing services (for restart)"
 if [[ -x "$ROOT_DIR/stop-core.sh" ]]; then
   "$ROOT_DIR/stop-core.sh" || true
 else
   echo "WARN: stop-core.sh not found or not executable, skip stop step."
 fi
 
-echo "[0.5/6] Clearing old logs"
+echo "[0.5/7] Clearing old logs"
 rm -f "$LOG_DIR"/*.log
 
-echo "[1/6] Building project: mvn clean package -U"
+echo "[1/7] Building project: mvn clean package -U"
 (cd "$ROOT_DIR" && mvn clean package -U)
 
 start_service() {
@@ -76,29 +76,34 @@ check_service_health() {
   echo "Health check passed: $name"
 }
 
-echo "[2/5] Starting driver"
+echo "[2/7] Starting driver"
 start_service "driver" "$ROOT_DIR/driver/target/driver-1.0.0-SNAPSHOT.jar"
 check_service_health "driver" 20
 sleep 2
 
-echo "[3/5] Starting match"
+echo "[3/7] Starting match"
 start_service "match" "$ROOT_DIR/match/target/match-1.0.0-SNAPSHOT.jar"
 check_service_health "match" 20
 sleep 2
 
-echo "[4/5] Starting account"
+echo "[4/7] Starting account"
 start_service "account" "$ROOT_DIR/account/target/account-1.0.0-SNAPSHOT.jar"
 check_service_health "account" 20
 sleep 2
 
-echo "[5/6] Starting order"
+echo "[5/7] Starting order"
 start_service "order" "$ROOT_DIR/order/target/order-1.0.0-SNAPSHOT.jar"
 check_service_health "order" 20
 sleep 2
 
-echo "[6/6] Starting market"
+echo "[6/7] Starting market"
 start_service "market" "$ROOT_DIR/market/target/market-1.0.0-SNAPSHOT.jar"
 check_service_health "market" 20
+sleep 2
+
+echo "[7/7] Starting maker"
+start_service "maker" "$ROOT_DIR/maker/target/maker-1.0.0-SNAPSHOT.jar"
+check_service_health "maker" 20
 
 echo ""
 echo "Done. Check logs:"
@@ -107,3 +112,4 @@ echo "  tail -f \"$LOG_DIR/match.log\""
 echo "  tail -f \"$LOG_DIR/account.log\""
 echo "  tail -f \"$LOG_DIR/order.log\""
 echo "  tail -f \"$LOG_DIR/market.log\""
+echo "  tail -f \"$LOG_DIR/maker.log\""

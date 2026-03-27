@@ -11,11 +11,11 @@ import com.ganten.peanuts.common.enums.OrderStatus;
 import com.ganten.peanuts.common.enums.Source;
 import com.ganten.peanuts.gateway.account.AccountLockService;
 import com.ganten.peanuts.gateway.cache.OrderCache;
+import com.ganten.peanuts.gateway.mapping.OrderProtocolMapper;
+import com.ganten.peanuts.gateway.messaging.publisher.OrderPublisher;
 import com.ganten.peanuts.gateway.model.AcceptedResponse;
 import com.ganten.peanuts.gateway.model.OrderSubmitRequest;
-import com.ganten.peanuts.gateway.mapping.OrderProtocolMapper;
 import com.ganten.peanuts.protocol.model.LockResponseProto;
-import com.ganten.peanuts.gateway.messaging.publisher.OrderPublisher;
 
 @Service
 public class OrderService {
@@ -26,8 +26,7 @@ public class OrderService {
     private final OrderCache orderCache;
 
     public OrderService(OrderPublisher orderPublisher, AccountLockService accountLockService,
-            @Qualifier("orderDispatchExecutor") TaskExecutor orderDispatchExecutor,
-            OrderCache orderCache) {
+            @Qualifier("orderDispatchExecutor") TaskExecutor orderDispatchExecutor, OrderCache orderCache) {
         this.orderPublisher = orderPublisher;
         this.accountLockService = accountLockService;
         this.orderDispatchExecutor = orderDispatchExecutor;
@@ -39,7 +38,11 @@ public class OrderService {
      */
     public AcceptedResponse submitOrder(OrderSubmitRequest request) {
         Order order = new Order();
-        order.setOrderId(System.nanoTime());
+        if (request.getOrderId() != null && request.getOrderId() > 0L) {
+            order.setOrderId(request.getOrderId());
+        } else {
+            order.setOrderId(System.nanoTime());
+        }
         order.setUserId(request.getUserId());
         order.setContract(request.getContract());
         order.setSide(request.getSide());

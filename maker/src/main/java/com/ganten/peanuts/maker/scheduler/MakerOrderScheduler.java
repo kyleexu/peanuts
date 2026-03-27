@@ -1,4 +1,4 @@
-package com.ganten.peanuts.gateway.scheduler;
+package com.ganten.peanuts.maker.scheduler;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -9,27 +9,33 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.RestTemplate;
 
-import com.ganten.peanuts.common.entity.Order;
-import com.ganten.peanuts.common.enums.*;
-import com.ganten.peanuts.gateway.service.OrderService;
+import com.ganten.peanuts.common.enums.Contract;
+import com.ganten.peanuts.common.enums.Currency;
+import com.ganten.peanuts.common.enums.OrderAction;
+import com.ganten.peanuts.common.enums.OrderType;
+import com.ganten.peanuts.common.enums.Side;
+import com.ganten.peanuts.common.enums.Source;
+import com.ganten.peanuts.common.enums.TimeInForce;
+import com.ganten.peanuts.maker.cache.TickerCache;
+import com.ganten.peanuts.maker.client.AccountClient;
+import com.ganten.peanuts.maker.client.OrderClient;
+import com.ganten.peanuts.maker.entity.LadderOrderRef;
+import com.ganten.peanuts.maker.model.OrderSubmitRequest;
 
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Component
-public class RandomOrderScheduler {
+public class MakerOrderScheduler {
 
-    private final OrderService orderService;
     private final boolean enabled;
-    private final String accountApiBaseUrl;
-    private final String marketApiBaseUrl;
+    private final AccountClient accountClient;
+    private final OrderClient orderClient;
+    private final TickerCache tickerCache;
     private final int orderBookLevel;
     private final BigDecimal minAvailableQuote;
     private final BigDecimal minAvailableBase;
@@ -41,33 +47,36 @@ public class RandomOrderScheduler {
     private final BigDecimal overlapBps;
     private final Map<Contract, BigDecimal> anchors = new ConcurrentHashMap<Contract, BigDecimal>();
     private final Map<String, BigDecimal> balanceCache = new ConcurrentHashMap<String, BigDecimal>();
-    private final Map<Contract, List<LadderOrderRef>> liveLadderOrders = new ConcurrentHashMap<Contract, List<LadderOrderRef>>();
-    private final RestTemplate restTemplate = new RestTemplate();
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final Map<Contract, List<LadderOrderRef>> liveLadderOrders =
+            new ConcurrentHashMap<Contract, List<LadderOrderRef>>();
+
     private static final BigDecimal MIN_QTY = new BigDecimal("0.000001");
+    private static final BigDecimal CANCEL_DUMMY = new BigDecimal("0.00000001");
 
     private static final long[] MAKER_USERS = {10001L, 10002L, 10003L};
     private static final long[] TAKER_USERS = {20001L, 20002L};
+
     private final AtomicInteger makerCursor = new AtomicInteger(0);
     private final AtomicInteger takerCursor = new AtomicInteger(0);
 
-    public RandomOrderScheduler(OrderService orderService,
-            @Value("${gateway.random-order.enabled:true}") boolean enabled,
-            @Value("${gateway.random-order.account-api-base-url:http://localhost:8081}") String accountApiBaseUrl,
-            @Value("${gateway.random-order.market-api-base-url:http://localhost:8082}") String marketApiBaseUrl,
-            @Value("${gateway.random-order.orderbook-level:1}") int orderBookLevel,
-            @Value("${gateway.random-order.min-available-quote:1000}") BigDecimal minAvailableQuote,
-            @Value("${gateway.random-order.min-available-base:0.5}") BigDecimal minAvailableBase,
-            @Value("${gateway.random-order.ladder-levels:6}") int ladderLevels,
-            @Value("${gateway.random-order.ladder-step-bps:8}") BigDecimal ladderStepBps,
-            @Value("${gateway.random-order.min-ladder-notional-usdt:120}") BigDecimal minLadderNotionalUsdt,
-            @Value("${gateway.random-order.max-ladder-notional-usdt:400}") BigDecimal maxLadderNotionalUsdt,
-            @Value("${gateway.random-order.overlap-levels:2}") int overlapLevels,
-            @Value("${gateway.random-order.overlap-bps:2}") BigDecimal overlapBps) {
-        this.orderService = orderService;
+    public MakerOrderScheduler(
+            AccountClient accountClient,
+            OrderClient orderClient,
+            TickerCache tickerCache,
+            @Value("${maker.random-order.enabled:true}") boolean enabled,
+            @Value("${maker.random-order.orderbook-level:1}") int orderBookLevel,
+            @Value("${maker.random-order.min-available-quote:1000}") BigDecimal minAvailableQuote,
+            @Value("${maker.random-order.min-available-base:0.5}") BigDecimal minAvailableBase,
+            @Value("${maker.random-order.ladder-levels:6}") int ladderLevels,
+            @Value("${maker.random-order.ladder-step-bps:8}") BigDecimal ladderStepBps,
+            @Value("${maker.random-order.min-ladder-notional-usdt:120}") BigDecimal minLadderNotionalUsdt,
+            @Value("${maker.random-order.max-ladder-notional-usdt:400}") BigDecimal maxLadderNotionalUsdt,
+            @Value("${maker.random-order.overlap-levels:2}") int overlapLevels,
+            @Value("${maker.random-order.overlap-bps:2}") BigDecimal overlapBps) {
+        this.accountClient = accountClient;
+        this.orderClient = orderClient;
+        this.tickerCache = tickerCache;
         this.enabled = enabled;
-        this.accountApiBaseUrl = accountApiBaseUrl;
-        this.marketApiBaseUrl = marketApiBaseUrl;
         this.orderBookLevel = orderBookLevel;
         this.minAvailableQuote = minAvailableQuote;
         this.minAvailableBase = minAvailableBase;
@@ -81,12 +90,13 @@ public class RandomOrderScheduler {
                 : maxLadderNotionalUsdt.max(this.minLadderNotionalUsdt);
         this.overlapLevels = Math.max(0, overlapLevels);
         this.overlapBps = overlapBps == null ? BigDecimal.valueOf(2) : overlapBps.max(BigDecimal.ZERO);
+
         anchors.put(Contract.BTC_USDT, BigDecimal.valueOf(45000));
         anchors.put(Contract.ETH_USDT, BigDecimal.valueOf(3000));
         seedBalanceCache();
     }
 
-    @Scheduled(fixedDelayString = "${gateway.random-order.fixed-delay-ms:1000}")
+    @Scheduled(fixedDelayString = "${maker.random-order.fixed-delay-ms:1000}")
     public void dispatchRandomOrder() {
         if (!enabled) {
             return;
@@ -97,23 +107,22 @@ public class RandomOrderScheduler {
             BigDecimal anchor = moveAnchor(contract);
             emitLadderOrders(contract, anchor);
         } catch (Exception ex) {
-            // Keep scheduler alive even when one order fails.
-            log.warn("random-order scheduler skipped one tick: {}", ex.getMessage());
+            log.warn("maker scheduler skipped one tick: {}", ex.getMessage());
         }
     }
 
     private BigDecimal moveAnchor(Contract contract) {
         BigDecimal current = anchors.get(contract);
-        int bps = ThreadLocalRandom.current().nextInt(-8, 9); // +/-0.08%
+        int bps = ThreadLocalRandom.current().nextInt(-8, 9);
         BigDecimal factor = BigDecimal.valueOf(10000 + bps).divide(BigDecimal.valueOf(10000));
         BigDecimal moved = current.multiply(factor);
 
-        // Prevent long-term drift outside reasonable sandbox range.
         if (contract == Contract.BTC_USDT) {
             moved = clamp(moved, BigDecimal.valueOf(30000), BigDecimal.valueOf(70000));
         } else {
             moved = clamp(moved, BigDecimal.valueOf(1500), BigDecimal.valueOf(5000));
         }
+
         moved = moved.setScale(4, RoundingMode.HALF_UP);
         anchors.put(contract, moved);
         return moved;
@@ -125,41 +134,42 @@ public class RandomOrderScheduler {
 
         BigDecimal price = resolvePriceFromOrderBook(contract, anchor);
         if (price == null || price.signum() <= 0) {
-            log.warn("Skip scheduler tick, invalid price. contract={}", contract);
+            log.warn("Skip maker tick, invalid price. contract={}", contract);
             return;
         }
 
         BigDecimal buyQuoteAvailable = fetchAvailableBalance(buyUser, contract.getQuote());
         BigDecimal sellBaseAvailable = fetchAvailableBalance(sellUser, contract.getBase());
         if (buyQuoteAvailable == null || sellBaseAvailable == null) {
-            log.warn("Skip scheduler tick, failed to fetch balances. contract={}, buyUser={}, sellUser={}",
+            log.warn("Skip maker tick, failed to fetch balances. contract={}, buyUser={}, sellUser={}",
                     contract, buyUser, sellUser);
             return;
         }
 
         cancelExistingLadderOrders(contract);
-        List<Order> orders = buildLadderOrders(contract, buyUser, sellUser, price, buyQuoteAvailable, sellBaseAvailable);
+        List<OrderSubmitRequest> orders = buildLadderOrders(
+                contract, buyUser, sellUser, price, buyQuoteAvailable, sellBaseAvailable);
         if (orders.isEmpty()) {
-            log.info("Skip scheduler tick, no valid ladder orders. contract={}, buyUser={}, sellUser={}, buyQuoteAvailable={}, sellBaseAvailable={}, price={}",
+            log.info("Skip maker tick, no valid ladder orders. contract={}, buyUser={}, sellUser={}, buyQuoteAvailable={}, sellBaseAvailable={}, price={}",
                     contract, buyUser, sellUser, buyQuoteAvailable, sellBaseAvailable, price);
             return;
         }
 
         List<LadderOrderRef> refs = new ArrayList<LadderOrderRef>(orders.size());
-        for (Order order : orders) {
+        for (OrderSubmitRequest order : orders) {
             submitOrder(order);
             refs.add(new LadderOrderRef(order.getOrderId(), order.getUserId(), order.getContract()));
         }
         liveLadderOrders.put(contract, refs);
     }
 
-    private List<Order> buildLadderOrders(Contract contract,
+    private List<OrderSubmitRequest> buildLadderOrders(Contract contract,
             long buyUser,
             long sellUser,
             BigDecimal midPrice,
             BigDecimal buyQuoteAvailable,
             BigDecimal sellBaseAvailable) {
-        List<Order> orders = new ArrayList<Order>();
+        List<OrderSubmitRequest> orders = new ArrayList<OrderSubmitRequest>();
         BigDecimal totalBuyQtyBudget = buyQuoteAvailable.divide(midPrice, 6, RoundingMode.DOWN);
         BigDecimal remainingBuyQty = totalBuyQtyBudget.max(BigDecimal.ZERO);
         BigDecimal remainingSellQty = sellBaseAvailable.max(BigDecimal.ZERO);
@@ -170,7 +180,6 @@ public class RandomOrderScheduler {
             BigDecimal buyFactor = oneBps.subtract(bpsOffset).divide(oneBps, 8, RoundingMode.HALF_UP);
             BigDecimal sellFactor = oneBps.add(bpsOffset).divide(oneBps, 8, RoundingMode.HALF_UP);
             if (level <= overlapLevels && overlapBps.signum() > 0) {
-                // Inner levels intentionally cross to create continuous trades.
                 BigDecimal overlap = overlapBps.multiply(BigDecimal.valueOf(overlapLevels - level + 1));
                 buyFactor = oneBps.add(overlap).divide(oneBps, 8, RoundingMode.HALF_UP);
                 sellFactor = oneBps.subtract(overlap).divide(oneBps, 8, RoundingMode.HALF_UP);
@@ -201,12 +210,12 @@ public class RandomOrderScheduler {
     }
 
     private BigDecimal randomNotionalForLevel(int level) {
-        int rand = ThreadLocalRandom.current().nextInt(70, 131); // 70% ~ 130%
+        int rand = ThreadLocalRandom.current().nextInt(70, 131);
         BigDecimal noise = BigDecimal.valueOf(rand).divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP);
         BigDecimal center = BigDecimal.valueOf(ladderLevels + 1).divide(BigDecimal.valueOf(2), 4, RoundingMode.HALF_UP);
         BigDecimal distance = BigDecimal.valueOf(level).subtract(center).abs();
         BigDecimal normalized = distance.divide(center, 4, RoundingMode.HALF_UP).min(BigDecimal.ONE);
-        BigDecimal curve = BigDecimal.ONE.subtract(normalized.multiply(new BigDecimal("0.65"))); // center > edge
+        BigDecimal curve = BigDecimal.ONE.subtract(normalized.multiply(new BigDecimal("0.65")));
         BigDecimal range = maxLadderNotionalUsdt.subtract(minLadderNotionalUsdt);
         BigDecimal baseline = minLadderNotionalUsdt.add(range.multiply(curve));
         return baseline.multiply(noise).setScale(4, RoundingMode.HALF_UP);
@@ -217,40 +226,39 @@ public class RandomOrderScheduler {
         if (refs == null || refs.isEmpty()) {
             return;
         }
+
         for (LadderOrderRef ref : refs) {
             try {
                 submitOrder(buildCancelOrder(ref));
             } catch (Exception ex) {
                 log.debug("Cancel old ladder order failed. contract={}, orderId={}, error={}",
-                        contract, ref.orderId, ex.getMessage());
+                        contract, ref.getOrderId(), ex.getMessage());
             }
         }
     }
 
-    private Order buildCancelOrder(LadderOrderRef ref) {
-        Order cancel = new Order();
+    private OrderSubmitRequest buildCancelOrder(LadderOrderRef ref) {
+        OrderSubmitRequest cancel = new OrderSubmitRequest();
         cancel.setOrderId(System.nanoTime());
-        cancel.setUserId(ref.userId);
-        cancel.setContract(ref.contract);
+        cancel.setUserId(ref.getUserId());
+        cancel.setContract(ref.getContract());
         cancel.setSide(Side.BUY);
         cancel.setOrderType(OrderType.LIMIT);
         cancel.setTimeInForce(TimeInForce.GTC);
-        cancel.setPrice(BigDecimal.ZERO);
-        cancel.setFilledQuantity(BigDecimal.ZERO);
-        cancel.setTotalQuantity(BigDecimal.ZERO);
-        cancel.setTimestamp(System.currentTimeMillis());
+        cancel.setPrice(CANCEL_DUMMY);
+        cancel.setTotalQuantity(CANCEL_DUMMY);
         cancel.setSource(Source.SCHEDULER);
         cancel.setAction(OrderAction.CANCEL);
-        cancel.setTargetOrderId(ref.orderId);
+        cancel.setTargetOrderId(ref.getOrderId());
         return cancel;
     }
 
-    private void submitOrder(Order order) {
-        orderService.submitOrder(order);
+    private void submitOrder(OrderSubmitRequest order) {
+        orderClient.submitOrder(order);
     }
 
-    private Order buildOrder(long userId, Contract contract, Side side, BigDecimal price, BigDecimal quantity) {
-        Order order = new Order();
+    private OrderSubmitRequest buildOrder(long userId, Contract contract, Side side, BigDecimal price, BigDecimal quantity) {
+        OrderSubmitRequest order = new OrderSubmitRequest();
         order.setOrderId(System.nanoTime());
         order.setUserId(userId);
         order.setContract(contract);
@@ -258,10 +266,10 @@ public class RandomOrderScheduler {
         order.setOrderType(OrderType.LIMIT);
         order.setTimeInForce(TimeInForce.GTC);
         order.setPrice(price);
-        order.setFilledQuantity(BigDecimal.ZERO);
         order.setTotalQuantity(quantity);
-        order.setTimestamp(System.currentTimeMillis());
         order.setSource(Source.SCHEDULER);
+        order.setAction(OrderAction.NEW);
+        order.setTargetOrderId(0L);
         return order;
     }
 
@@ -297,69 +305,24 @@ public class RandomOrderScheduler {
     }
 
     private BigDecimal resolvePriceFromOrderBook(Contract contract, BigDecimal fallbackAnchor) {
-        try {
-            String url = String.format("%s/api/market/orderbook/%s?level=%d",
-                    this.marketApiBaseUrl, contract.name(), this.orderBookLevel);
-            String body = restTemplate.getForObject(url, String.class);
-            if (body == null || body.isEmpty()) {
-                return fallbackAnchor;
-            }
-            JsonNode root = objectMapper.readTree(body);
-            BigDecimal bid = firstPrice(root.path("bids"));
-            BigDecimal ask = firstPrice(root.path("asks"));
-            if (bid != null && ask != null && bid.signum() > 0 && ask.signum() > 0) {
-                return bid.add(ask).divide(BigDecimal.valueOf(2), 4, RoundingMode.HALF_UP);
-            }
-            if (ask != null && ask.signum() > 0) {
-                return ask.setScale(4, RoundingMode.HALF_UP);
-            }
-            if (bid != null && bid.signum() > 0) {
-                return bid.setScale(4, RoundingMode.HALF_UP);
-            }
-        } catch (Exception ex) {
-            log.debug("Read orderbook failed, use anchor fallback. contract={}, error={}", contract, ex.getMessage());
+        BigDecimal cachedPrice = tickerCache.getLastPrice(contract);
+        if (cachedPrice != null && cachedPrice.signum() > 0) {
+            return cachedPrice.setScale(4, RoundingMode.HALF_UP);
         }
         return fallbackAnchor;
     }
 
     private BigDecimal fetchAvailableBalance(long userId, Currency currency) {
         String key = cacheKey(userId, currency);
-        try {
-            String url = String.format("%s/api/accounts/%d/currencies/%s", this.accountApiBaseUrl.trim(), userId,
-                    currency.name());
-            String body = restTemplate.getForObject(url, String.class);
-            if (body == null || body.isEmpty()) {
-                return balanceCache.get(key);
-            }
-            JsonNode root = objectMapper.readTree(body);
-            JsonNode available = root.path("available");
-            if (available.isMissingNode() || available.isNull()) {
-                return balanceCache.get(key);
-            }
-            BigDecimal value = new BigDecimal(available.asText("0"));
+        BigDecimal value = accountClient.fetchAvailableBalance(userId, currency);
+        if (value != null) {
             balanceCache.put(key, value);
             return value;
-        } catch (Exception ex) {
-            BigDecimal cached = balanceCache.get(key);
-            log.warn("Read account balance failed, fallback cache. userId={}, currency={}, baseUrl={}, cached={}, error={}",
-                    userId, currency, this.accountApiBaseUrl, cached, ex.getMessage());
-            return cached;
         }
-    }
-
-    private BigDecimal firstPrice(JsonNode levels) {
-        if (levels == null || !levels.isArray() || levels.size() == 0) {
-            return null;
-        }
-        JsonNode first = levels.get(0);
-        if (first == null || first.isNull()) {
-            return null;
-        }
-        JsonNode priceNode = first.path("price");
-        if (priceNode.isMissingNode() || priceNode.isNull()) {
-            return null;
-        }
-        return new BigDecimal(priceNode.asText("0"));
+        BigDecimal cached = balanceCache.get(key);
+        log.warn("Read account balance failed, fallback cache. userId={}, currency={}, cached={}",
+                userId, currency, cached);
+        return cached;
     }
 
     private String cacheKey(long userId, Currency currency) {
@@ -367,7 +330,6 @@ public class RandomOrderScheduler {
     }
 
     private void seedBalanceCache() {
-        // bootstrap with initial-balances defaults, then gradually corrected by live API values.
         for (long maker : MAKER_USERS) {
             balanceCache.put(cacheKey(maker, Currency.USDT), BigDecimal.valueOf(1_000_000L));
             balanceCache.put(cacheKey(maker, Currency.BTC), BigDecimal.valueOf(100L));
@@ -388,17 +350,5 @@ public class RandomOrderScheduler {
             return max;
         }
         return value;
-    }
-
-    private static final class LadderOrderRef {
-        private final long orderId;
-        private final long userId;
-        private final Contract contract;
-
-        private LadderOrderRef(long orderId, long userId, Contract contract) {
-            this.orderId = orderId;
-            this.userId = userId;
-            this.contract = contract;
-        }
     }
 }

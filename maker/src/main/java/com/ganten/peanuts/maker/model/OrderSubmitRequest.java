@@ -1,51 +1,24 @@
-package com.ganten.peanuts.gateway.model;
+package com.ganten.peanuts.maker.model;
 
 import java.math.BigDecimal;
-import javax.validation.constraints.DecimalMin;
-import javax.validation.constraints.NotNull;
-import com.ganten.peanuts.common.enums.*;
 
-/**
-// {
-//   "userId": 10001,
-//   "contract": "BTC_USDT",
-//   "side": "BUY",
-//   "orderType": "LIMIT",
-//   "timeInForce": "GTC",
-//   "price": 45000,
-//   "totalQuantity": 2,
-//   "source": "API",
-//   "action": "NEW",
-//   "targetOrderId": 0
-// }
- */
+import com.ganten.peanuts.common.enums.Contract;
+import com.ganten.peanuts.common.enums.OrderAction;
+import com.ganten.peanuts.common.enums.OrderType;
+import com.ganten.peanuts.common.enums.Side;
+import com.ganten.peanuts.common.enums.Source;
+import com.ganten.peanuts.common.enums.TimeInForce;
+
 public class OrderSubmitRequest {
 
     private Long orderId;
-
-    @NotNull
     private Long userId;
-
-    @NotNull
     private Contract contract;
-
-    @NotNull
     private Side side;
-
-    @NotNull
     private OrderType orderType;
-
-    @NotNull
     private TimeInForce timeInForce;
-
-    @NotNull
-    @DecimalMin("0.00000001")
     private BigDecimal price;
-
-    @NotNull
-    @DecimalMin("0.00000001")
     private BigDecimal totalQuantity;
-
     private Source source;
     private OrderAction action;
     private Long targetOrderId;
