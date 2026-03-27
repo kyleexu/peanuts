@@ -40,6 +40,7 @@ public class MakerLadderScheduler {
     private final BigDecimal minLadderNotionalUsdt;
     private final BigDecimal maxLadderNotionalUsdt;
     private final int maxActiveOrdersPerContract;
+    private final int minOrdersPerSide;
     private final BigDecimal rebalanceDeviationBps;
     private final long rebalanceIntervalMs;
     private final BigDecimal inventoryTargetBaseQty;
@@ -64,6 +65,7 @@ public class MakerLadderScheduler {
             @Value("${maker.random-order.min-ladder-notional-usdt:120}") BigDecimal minLadderNotionalUsdt,
             @Value("${maker.random-order.max-ladder-notional-usdt:400}") BigDecimal maxLadderNotionalUsdt,
             @Value("${maker.random-order.max-active-orders-per-contract:12}") int maxActiveOrdersPerContract,
+            @Value("${maker.random-order.min-orders-per-side:3}") int minOrdersPerSide,
             @Value("${maker.random-order.rebalance-deviation-bps:25}") BigDecimal rebalanceDeviationBps,
             @Value("${maker.random-order.rebalance-interval-ms:15000}") long rebalanceIntervalMs,
             @Value("${maker.random-order.inventory-target-base-qty:0}") BigDecimal inventoryTargetBaseQty,
@@ -83,6 +85,8 @@ public class MakerLadderScheduler {
         this.maxLadderNotionalUsdt = maxLadderNotionalUsdt == null ? BigDecimal.valueOf(400)
                 : maxLadderNotionalUsdt.max(this.minLadderNotionalUsdt);
         this.maxActiveOrdersPerContract = Math.max(2, maxActiveOrdersPerContract);
+        this.minOrdersPerSide =
+                Math.max(1, Math.min(minOrdersPerSide, Math.max(1, this.maxActiveOrdersPerContract / 2)));
         this.rebalanceDeviationBps =
                 rebalanceDeviationBps == null ? BigDecimal.valueOf(25) : rebalanceDeviationBps.max(BigDecimal.ONE);
         this.rebalanceIntervalMs = Math.max(1000L, rebalanceIntervalMs);
@@ -145,18 +149,27 @@ public class MakerLadderScheduler {
         List<LadderOrderRef> currentRefs =
                 liveLadderOrders.computeIfAbsent(contract, k -> new ArrayList<LadderOrderRef>());
         pruneCompletedLadderOrders(currentRefs);
+        int activeBuy = countActiveOrdersBySide(currentRefs, Side.BUY);
+        int activeSell = countActiveOrdersBySide(currentRefs, Side.SELL);
+        rebalanceSideSlots(currentRefs, activeBuy, activeSell);
+        activeBuy = countActiveOrdersBySide(currentRefs, Side.BUY);
+        activeSell = countActiveOrdersBySide(currentRefs, Side.SELL);
+
         int missingOrders = Math.max(0, maxActiveOrdersPerContract - currentRefs.size());
         if (missingOrders <= 0) {
             return;
         }
+        int requiredBuyOrders = Math.max(0, minOrdersPerSide - activeBuy);
+        int requiredSellOrders = Math.max(0, minOrdersPerSide - activeSell);
 
         BigDecimal sideBias = combineBias(contract, price);
         List<OrderSubmitRequest> orders = buildLadderOrders(contract, buyUser, sellUser, price, buyQuoteAvailable,
-                sellBaseAvailable, missingOrders, sideBias);
+                sellBaseAvailable, missingOrders, sideBias, requiredBuyOrders, requiredSellOrders);
         for (OrderSubmitRequest order : orders) {
             orderExecutionStateCache.registerSubmittedOrder(order, "MAKER");
             submitOrder(order);
-            currentRefs.add(new LadderOrderRef(order.getOrderId(), order.getUserId(), order.getContract()));
+            currentRefs.add(
+                    new LadderOrderRef(order.getOrderId(), order.getUserId(), order.getContract(), order.getSide()));
         }
         ladderMidByContract.put(contract, price);
         ladderRefreshAtByContract.put(contract, System.currentTimeMillis());
@@ -164,7 +177,7 @@ public class MakerLadderScheduler {
 
     private List<OrderSubmitRequest> buildLadderOrders(Contract contract, long buyUser, long sellUser,
             BigDecimal midPrice, BigDecimal buyQuoteAvailable, BigDecimal sellBaseAvailable, int maxOrders,
-            BigDecimal sideBias) {
+            BigDecimal sideBias, int requiredBuyOrders, int requiredSellOrders) {
         List<OrderSubmitRequest> orders = new ArrayList<OrderSubmitRequest>();
         BigDecimal totalBuyQtyBudget = buyQuoteAvailable.divide(midPrice, 6, RoundingMode.DOWN);
         BigDecimal remainingBuyQty = totalBuyQtyBudget.max(BigDecimal.ZERO);
@@ -179,7 +192,9 @@ public class MakerLadderScheduler {
 
         for (int i = 0; i < maxAttempts && orders.size() < maxOrders; i++) {
             int level = ThreadLocalRandom.current().nextInt(1, ladderLevels + 1);
-            boolean tryBuy = ThreadLocalRandom.current().nextDouble() < buyProbability;
+            boolean forceBuy = requiredBuyOrders > 0;
+            boolean forceSell = !forceBuy && requiredSellOrders > 0;
+            boolean tryBuy = forceBuy || (!forceSell && ThreadLocalRandom.current().nextDouble() < buyProbability);
             BigDecimal bpsOffset = ladderStepBps.multiply(BigDecimal.valueOf(level));
             BigDecimal buyFactor = oneBps.subtract(bpsOffset).divide(oneBps, 8, RoundingMode.HALF_UP);
             BigDecimal sellFactor = oneBps.add(bpsOffset).divide(oneBps, 8, RoundingMode.HALF_UP);
@@ -197,6 +212,9 @@ public class MakerLadderScheduler {
                     orders.add(buildOrder(buyUser, contract, Side.BUY, buyPrice, buyQty, OrderType.LIMIT,
                             TimeInForce.GTC));
                     remainingBuyQty = remainingBuyQty.subtract(buyQty).max(BigDecimal.ZERO);
+                    if (requiredBuyOrders > 0) {
+                        requiredBuyOrders--;
+                    }
                 }
                 continue;
             }
@@ -210,10 +228,54 @@ public class MakerLadderScheduler {
                     orders.add(buildOrder(sellUser, contract, Side.SELL, sellPrice, sellQty, OrderType.LIMIT,
                             TimeInForce.GTC));
                     remainingSellQty = remainingSellQty.subtract(sellQty).max(BigDecimal.ZERO);
+                    if (requiredSellOrders > 0) {
+                        requiredSellOrders--;
+                    }
                 }
             }
         }
         return orders;
+    }
+
+    private int countActiveOrdersBySide(List<LadderOrderRef> refs, Side side) {
+        int count = 0;
+        for (LadderOrderRef ref : refs) {
+            if (ref.getSide() == side) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    private void rebalanceSideSlots(List<LadderOrderRef> refs, int activeBuy, int activeSell) {
+        int needBuy = Math.max(0, minOrdersPerSide - activeBuy);
+        int needSell = Math.max(0, minOrdersPerSide - activeSell);
+        if (needBuy == 0 && needSell == 0) {
+            return;
+        }
+        int overBuy = Math.max(0, activeBuy - minOrdersPerSide);
+        int overSell = Math.max(0, activeSell - minOrdersPerSide);
+        int cancelBuyCount = Math.min(overBuy, needSell);
+        int cancelSellCount = Math.min(overSell, needBuy);
+        if (cancelBuyCount <= 0 && cancelSellCount <= 0) {
+            return;
+        }
+
+        Iterator<LadderOrderRef> iterator = refs.iterator();
+        while (iterator.hasNext() && (cancelBuyCount > 0 || cancelSellCount > 0)) {
+            LadderOrderRef ref = iterator.next();
+            if (ref.getSide() == Side.BUY && cancelBuyCount > 0) {
+                cancelOrderRef(ref);
+                iterator.remove();
+                cancelBuyCount--;
+                continue;
+            }
+            if (ref.getSide() == Side.SELL && cancelSellCount > 0) {
+                cancelOrderRef(ref);
+                iterator.remove();
+                cancelSellCount--;
+            }
+        }
     }
 
     private void maybeRebalanceLadder(Contract contract, BigDecimal marketMidPrice) {
@@ -281,14 +343,18 @@ public class MakerLadderScheduler {
             return;
         }
         for (LadderOrderRef ref : refs) {
-            try {
-                submitOrder(buildCancelOrder(ref));
-            } catch (Exception ex) {
-                log.debug("Cancel old ladder order failed. contract={}, orderId={}, error={}", contract,
-                        ref.getOrderId(), ex.getMessage());
-            }
-            orderExecutionStateCache.remove(ref.getOrderId());
+            cancelOrderRef(ref);
         }
+    }
+
+    private void cancelOrderRef(LadderOrderRef ref) {
+        try {
+            submitOrder(buildCancelOrder(ref));
+        } catch (Exception ex) {
+            log.debug("Cancel old ladder order failed. contract={}, orderId={}, error={}", ref.getContract(),
+                    ref.getOrderId(), ex.getMessage());
+        }
+        orderExecutionStateCache.remove(ref.getOrderId());
     }
 
     private void pruneCompletedLadderOrders(List<LadderOrderRef> refs) {

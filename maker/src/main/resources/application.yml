@@ -2,13 +2,14 @@ server:
   port: 8085
 
 maker:
-  bybit:
+  ticker:
     websocket:
       enabled: true
-      # Try endpoints in order; service auto-rotates when handshake/close fails.
-      urls: wss://stream.bybit.com/v5/public/linear,wss://stream.bytick.com/v5/public/linear
+      # HashKey public quote websocket; service auto-reconnects on close/failure.
+      urls: wss://stream-pro.hashkey.com/quote/ws/v2
       symbols: BTCUSDT,ETHUSDT
       reconnect-delay-ms: 3000
+      heartbeat-interval-ms: 10000
   random-order:
     enabled: true
     fixed-delay-ms: 1000
@@ -23,6 +24,8 @@ maker:
     ladder-step-bps: 10
     min-ladder-notional-usdt: 120
     max-ladder-notional-usdt: 500
+    max-active-orders-per-contract: 12
+    min-orders-per-side: 4
     overlap-levels: 2
     overlap-bps: 2
     balance-warn-interval-ms: 30000

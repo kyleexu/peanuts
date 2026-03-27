@@ -13,7 +13,8 @@ public class ExecutionReportSubscriber extends AbstractAeronSubscriber<Execution
     private final OrderExecutionStateCache orderExecutionStateCache;
 
     public ExecutionReportSubscriber(OrderExecutionStateCache orderExecutionStateCache) {
-        super(AeronStream.EXECUTION_REPORT.toProperties(), ExecutionReportCodec.getInstance());
+        // Use a dedicated instance tag to avoid Raft node/group collisions with other services.
+        super(AeronStream.EXECUTION_REPORT.toProperties("maker"), ExecutionReportCodec.getInstance());
         this.orderExecutionStateCache = orderExecutionStateCache;
     }
 
