@@ -9,7 +9,9 @@ import com.ganten.peanuts.common.enums.ExecType;
 import com.ganten.peanuts.common.enums.OrderStatus;
 import com.ganten.peanuts.maker.model.OrderSubmitRequest;
 import com.ganten.peanuts.protocol.model.ExecutionReportProto;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 @Service
 public class OrderExecutionStateCache {
 
@@ -37,6 +39,9 @@ public class OrderExecutionStateCache {
         if (state == null) {
             return;
         }
+        log.info("Applying execution report to order execution state. orderId={}, execType={}, orderStatus={}, matchedQty={}, matchedPrice={}",
+                report.getOrderId(), report.getExecType(), report.getOrderStatus(),
+                report.getMatchedQuantity(), report.getMatchedPrice());
         state.apply(report);
     }
 

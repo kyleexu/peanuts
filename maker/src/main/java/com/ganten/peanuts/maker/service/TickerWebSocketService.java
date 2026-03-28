@@ -182,6 +182,7 @@ public class TickerWebSocketService {
 
             BigDecimal lastPrice = extractLastPrice(data);
             if (lastPrice != null && lastPrice.signum() > 0) {
+                log.info("HashKey ticker update. symbol={}, lastPrice={}", symbol, lastPrice);
                 tickerCache.putLastPrice(contract, lastPrice);
             }
         } catch (Exception ex) {
