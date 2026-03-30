@@ -19,6 +19,7 @@ import com.ganten.peanuts.maker.cache.TickerCache;
 import com.ganten.peanuts.maker.client.MarketClient;
 import com.ganten.peanuts.maker.client.OrderClient;
 import com.ganten.peanuts.maker.model.OrderSubmitRequest;
+import com.ganten.peanuts.maker.util.OrderIdGenerator;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -51,14 +52,14 @@ public class TakerFlowScheduler {
 
     public TakerFlowScheduler(BalanceCache balanceCache, OrderClient orderClient,
             OrderExecutionStateCache orderExecutionStateCache, MarketClient marketClient, TickerCache tickerCache,
-            @Value("${maker.random-order.enabled:true}") boolean enabled,
-            @Value("${maker.random-order.taker-enabled:true}") boolean takerEnabled,
-            @Value("${maker.random-order.min-available-quote:1000}") BigDecimal minAvailableQuote,
-            @Value("${maker.random-order.min-available-base:0.5}") BigDecimal minAvailableBase,
-            @Value("${maker.random-order.min-taker-notional-usdt:30}") BigDecimal minTakerNotionalUsdt,
-            @Value("${maker.random-order.max-taker-notional-usdt:180}") BigDecimal maxTakerNotionalUsdt,
-            @Value("${maker.random-order.taker-sweep-bps:1.5}") BigDecimal takerSweepBps,
-            @Value("${maker.random-order.taker-result-timeout-ms:1500}") long takerResultTimeoutMs) {
+            @Value("${maker.random-order.enabled}") boolean enabled,
+            @Value("${maker.random-order.taker-enabled}") boolean takerEnabled,
+            @Value("${maker.random-order.min-available-quote}") BigDecimal minAvailableQuote,
+            @Value("${maker.random-order.min-available-base}") BigDecimal minAvailableBase,
+            @Value("${maker.random-order.min-taker-notional-usdt}") BigDecimal minTakerNotionalUsdt,
+            @Value("${maker.random-order.max-taker-notional-usdt}") BigDecimal maxTakerNotionalUsdt,
+            @Value("${maker.random-order.taker-sweep-bps}") BigDecimal takerSweepBps,
+            @Value("${maker.random-order.taker-result-timeout-ms}") long takerResultTimeoutMs) {
         this.balanceCache = balanceCache;
         this.orderClient = orderClient;
         this.orderExecutionStateCache = orderExecutionStateCache;
@@ -75,8 +76,6 @@ public class TakerFlowScheduler {
         this.takerSweepBps = takerSweepBps == null ? BigDecimal.valueOf(1.5) : takerSweepBps.max(BigDecimal.ZERO);
         this.takerResultTimeoutMs = Math.max(100L, takerResultTimeoutMs);
 
-        anchors.put(Contract.BTC_USDT, BigDecimal.valueOf(45000));
-        anchors.put(Contract.ETH_USDT, BigDecimal.valueOf(3000));
         seedBalanceCache();
     }
 
@@ -119,6 +118,9 @@ public class TakerFlowScheduler {
 
         long userId = buy ? selectBestUserByAvailable(TAKER_USERS, contract.getQuote(), takerCursor, minAvailableQuote)
                 : selectBestUserByAvailable(TAKER_USERS, contract.getBase(), takerCursor, minAvailableBase);
+        if (userId < 0) {
+            return;
+        }
         BigDecimal available = fetchAvailableBalance(userId, buy ? contract.getQuote() : contract.getBase());
         if (available == null || available.signum() <= 0) {
             return;
@@ -203,7 +205,7 @@ public class TakerFlowScheduler {
     private OrderSubmitRequest buildOrder(long userId, Contract contract, Side side, BigDecimal price,
             BigDecimal quantity, OrderType orderType, TimeInForce timeInForce) {
         OrderSubmitRequest order = new OrderSubmitRequest();
-        order.setOrderId(System.nanoTime());
+        order.setOrderId(OrderIdGenerator.nextId());
         order.setUserId(userId);
         order.setContract(contract);
         order.setSide(side);
@@ -220,7 +222,7 @@ public class TakerFlowScheduler {
     private long selectBestUserByAvailable(long[] users, Currency currency, AtomicInteger cursor,
             BigDecimal minThreshold) {
         int start = Math.floorMod(cursor.getAndIncrement(), users.length);
-        long bestUser = users[start];
+        long bestUser = -1L;
         BigDecimal bestAvailable = BigDecimal.valueOf(-1);
         for (int i = 0; i < users.length; i++) {
             long userId = users[(start + i) % users.length];

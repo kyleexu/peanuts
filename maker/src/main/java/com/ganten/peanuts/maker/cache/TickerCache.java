@@ -2,13 +2,11 @@ package com.ganten.peanuts.maker.cache;
 
 import java.math.BigDecimal;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-
 import org.springframework.stereotype.Service;
-
 import com.ganten.peanuts.common.enums.Contract;
-
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -29,6 +27,6 @@ public class TickerCache {
 	}
 
 	public Map<Contract, BigDecimal> snapshot() {
-		return Collections.unmodifiableMap(new ConcurrentHashMap<Contract, BigDecimal>(lastPriceByContract));
+		return Collections.unmodifiableMap(new HashMap<Contract, BigDecimal>(lastPriceByContract));
 	}
 }

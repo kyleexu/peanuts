@@ -17,6 +17,7 @@ import com.ganten.peanuts.maker.cache.TickerCache;
 import com.ganten.peanuts.maker.client.OrderClient;
 import com.ganten.peanuts.maker.entity.LadderOrderRef;
 import com.ganten.peanuts.maker.model.OrderSubmitRequest;
+import com.ganten.peanuts.maker.util.OrderIdGenerator;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -57,20 +58,20 @@ public class MakerLadderScheduler {
 
     public MakerLadderScheduler(BalanceCache balanceCache, OrderClient orderClient,
             OrderExecutionStateCache orderExecutionStateCache, TickerCache tickerCache,
-            @Value("${maker.random-order.enabled:true}") boolean enabled,
-            @Value("${maker.random-order.min-available-quote:1000}") BigDecimal minAvailableQuote,
-            @Value("${maker.random-order.min-available-base:0.5}") BigDecimal minAvailableBase,
-            @Value("${maker.random-order.ladder-levels:6}") int ladderLevels,
-            @Value("${maker.random-order.ladder-step-bps:8}") BigDecimal ladderStepBps,
-            @Value("${maker.random-order.min-ladder-notional-usdt:120}") BigDecimal minLadderNotionalUsdt,
-            @Value("${maker.random-order.max-ladder-notional-usdt:400}") BigDecimal maxLadderNotionalUsdt,
-            @Value("${maker.random-order.max-active-orders-per-contract:12}") int maxActiveOrdersPerContract,
-            @Value("${maker.random-order.min-orders-per-side:3}") int minOrdersPerSide,
-            @Value("${maker.random-order.rebalance-deviation-bps:25}") BigDecimal rebalanceDeviationBps,
-            @Value("${maker.random-order.rebalance-interval-ms:15000}") long rebalanceIntervalMs,
-            @Value("${maker.random-order.inventory-target-base-qty:0}") BigDecimal inventoryTargetBaseQty,
-            @Value("${maker.random-order.inventory-soft-limit-base-qty:30}") BigDecimal inventorySoftLimitBaseQty,
-            @Value("${maker.random-order.inventory-bias-cap:0.5}") BigDecimal inventoryBiasCap) {
+            @Value("${maker.random-order.enabled}") boolean enabled,
+            @Value("${maker.random-order.min-available-quote}") BigDecimal minAvailableQuote,
+            @Value("${maker.random-order.min-available-base}") BigDecimal minAvailableBase,
+            @Value("${maker.random-order.ladder-levels}") int ladderLevels,
+            @Value("${maker.random-order.ladder-step-bps}") BigDecimal ladderStepBps,
+            @Value("${maker.random-order.min-ladder-notional-usdt}") BigDecimal minLadderNotionalUsdt,
+            @Value("${maker.random-order.max-ladder-notional-usdt}") BigDecimal maxLadderNotionalUsdt,
+            @Value("${maker.random-order.max-active-orders-per-contract}") int maxActiveOrdersPerContract,
+            @Value("${maker.random-order.min-orders-per-side}") int minOrdersPerSide,
+            @Value("${maker.random-order.rebalance-deviation-bps}") BigDecimal rebalanceDeviationBps,
+            @Value("${maker.random-order.rebalance-interval-ms}") long rebalanceIntervalMs,
+            @Value("${maker.random-order.inventory-target-base-qty}") BigDecimal inventoryTargetBaseQty,
+            @Value("${maker.random-order.inventory-soft-limit-base-qty}") BigDecimal inventorySoftLimitBaseQty,
+            @Value("${maker.random-order.inventory-bias-cap}") BigDecimal inventoryBiasCap) {
         this.balanceCache = balanceCache;
         this.orderClient = orderClient;
         this.orderExecutionStateCache = orderExecutionStateCache;
@@ -96,8 +97,6 @@ public class MakerLadderScheduler {
         this.inventoryBiasCap = inventoryBiasCap == null ? BigDecimal.valueOf(0.5)
                 : clamp(inventoryBiasCap.abs(), BigDecimal.valueOf(0.05), BigDecimal.valueOf(0.95));
 
-        anchors.put(Contract.BTC_USDT, BigDecimal.valueOf(45000));
-        anchors.put(Contract.ETH_USDT, BigDecimal.valueOf(3000));
         seedBalanceCache();
     }
 
@@ -117,7 +116,12 @@ public class MakerLadderScheduler {
     }
 
     private BigDecimal moveAnchor(Contract contract) {
-        BigDecimal current = anchors.get(contract);
+        // Prefer the real market price; fall back to the last anchor we computed.
+        BigDecimal marketPrice = tickerCache.getLastPrice(contract);
+        BigDecimal current = (marketPrice != null && marketPrice.signum() > 0) ? marketPrice : anchors.get(contract);
+        if (current == null || current.signum() <= 0) {
+            return null;
+        }
         double drift = ThreadLocalRandom.current().nextGaussian() * 0.0005D;
         BigDecimal factor = BigDecimal.valueOf(1D + drift);
         BigDecimal moved = current.multiply(factor);
@@ -132,8 +136,16 @@ public class MakerLadderScheduler {
     }
 
     private void emitLadderOrders(Contract contract, BigDecimal anchor) {
+        // Don't place any orders until the WebSocket has fed us a real market price.
+        // Prevents startup trades at the wrong hardcoded anchor price.
+        if (tickerCache.getLastPrice(contract) == null) {
+            return;
+        }
         long buyUser = selectBestUserByAvailable(MAKER_USERS, contract.getQuote(), makerCursor, minAvailableQuote);
         long sellUser = selectBestUserByAvailable(MAKER_USERS, contract.getBase(), makerCursor, minAvailableBase);
+        if (buyUser < 0 || sellUser < 0) {
+            return;
+        }
         BigDecimal price = resolvePriceFromOrderBook(contract, anchor);
         if (price == null || price.signum() <= 0) {
             return;
@@ -168,8 +180,8 @@ public class MakerLadderScheduler {
         for (OrderSubmitRequest order : orders) {
             orderExecutionStateCache.registerSubmittedOrder(order, "MAKER");
             submitOrder(order);
-            currentRefs.add(
-                    new LadderOrderRef(order.getOrderId(), order.getUserId(), order.getContract(), order.getSide()));
+            currentRefs.add(new LadderOrderRef(order.getOrderId(), order.getUserId(), order.getContract(),
+                    order.getSide(), order.getPrice()));
         }
         ladderMidByContract.put(contract, price);
         ladderRefreshAtByContract.put(contract, System.currentTimeMillis());
@@ -253,29 +265,38 @@ public class MakerLadderScheduler {
         if (needBuy == 0 && needSell == 0) {
             return;
         }
-        int overBuy = Math.max(0, activeBuy - minOrdersPerSide);
-        int overSell = Math.max(0, activeSell - minOrdersPerSide);
-        int cancelBuyCount = Math.min(overBuy, needSell);
-        int cancelSellCount = Math.min(overSell, needBuy);
+        int cancelBuyCount = Math.min(Math.max(0, activeBuy - minOrdersPerSide), needSell);
+        int cancelSellCount = Math.min(Math.max(0, activeSell - minOrdersPerSide), needBuy);
         if (cancelBuyCount <= 0 && cancelSellCount <= 0) {
             return;
         }
 
-        Iterator<LadderOrderRef> iterator = refs.iterator();
-        while (iterator.hasNext() && (cancelBuyCount > 0 || cancelSellCount > 0)) {
-            LadderOrderRef ref = iterator.next();
-            if (ref.getSide() == Side.BUY && cancelBuyCount > 0) {
-                cancelOrderRef(ref);
-                iterator.remove();
-                cancelBuyCount--;
-                continue;
-            }
-            if (ref.getSide() == Side.SELL && cancelSellCount > 0) {
-                cancelOrderRef(ref);
-                iterator.remove();
-                cancelSellCount--;
+        List<LadderOrderRef> buyRefs = new ArrayList<LadderOrderRef>();
+        List<LadderOrderRef> sellRefs = new ArrayList<LadderOrderRef>();
+        for (LadderOrderRef ref : refs) {
+            if (ref.getSide() == Side.BUY) {
+                buyRefs.add(ref);
+            } else if (ref.getSide() == Side.SELL) {
+                sellRefs.add(ref);
             }
         }
+        // Cancel buys with lowest price first (furthest below mid)
+        buyRefs.sort(Comparator.comparing(LadderOrderRef::getPrice));
+        // Cancel sells with highest price first (furthest above mid)
+        sellRefs.sort(Comparator.comparing(LadderOrderRef::getPrice).reversed());
+
+        Set<Long> cancelledIds = new HashSet<Long>();
+        for (int i = 0; i < cancelBuyCount && i < buyRefs.size(); i++) {
+            LadderOrderRef ref = buyRefs.get(i);
+            cancelOrderRef(ref);
+            cancelledIds.add(ref.getOrderId());
+        }
+        for (int i = 0; i < cancelSellCount && i < sellRefs.size(); i++) {
+            LadderOrderRef ref = sellRefs.get(i);
+            cancelOrderRef(ref);
+            cancelledIds.add(ref.getOrderId());
+        }
+        refs.removeIf(r -> cancelledIds.contains(r.getOrderId()));
     }
 
     private void maybeRebalanceLadder(Contract contract, BigDecimal marketMidPrice) {
@@ -381,10 +402,10 @@ public class MakerLadderScheduler {
 
     private OrderSubmitRequest buildCancelOrder(LadderOrderRef ref) {
         OrderSubmitRequest cancel = new OrderSubmitRequest();
-        cancel.setOrderId(System.nanoTime());
+        cancel.setOrderId(OrderIdGenerator.nextId());
         cancel.setUserId(ref.getUserId());
         cancel.setContract(ref.getContract());
-        cancel.setSide(Side.BUY);
+        cancel.setSide(ref.getSide());
         cancel.setOrderType(OrderType.LIMIT);
         cancel.setTimeInForce(TimeInForce.GTC);
         cancel.setPrice(CANCEL_DUMMY);
@@ -402,7 +423,7 @@ public class MakerLadderScheduler {
     private OrderSubmitRequest buildOrder(long userId, Contract contract, Side side, BigDecimal price,
             BigDecimal quantity, OrderType orderType, TimeInForce timeInForce) {
         OrderSubmitRequest order = new OrderSubmitRequest();
-        order.setOrderId(System.nanoTime());
+        order.setOrderId(OrderIdGenerator.nextId());
         order.setUserId(userId);
         order.setContract(contract);
         order.setSide(side);
@@ -419,7 +440,7 @@ public class MakerLadderScheduler {
     private long selectBestUserByAvailable(long[] users, Currency currency, AtomicInteger cursor,
             BigDecimal minThreshold) {
         int start = Math.floorMod(cursor.getAndIncrement(), users.length);
-        long bestUser = users[start];
+        long bestUser = -1L;
         BigDecimal bestAvailable = BigDecimal.valueOf(-1);
         for (int i = 0; i < users.length; i++) {
             long userId = users[(start + i) % users.length];

@@ -1,5 +1,6 @@
 package com.ganten.peanuts.maker.entity;
 
+import java.math.BigDecimal;
 import com.ganten.peanuts.common.enums.Contract;
 import com.ganten.peanuts.common.enums.Side;
 import lombok.Getter;
@@ -12,4 +13,5 @@ public class LadderOrderRef {
     private final long userId;
     private final Contract contract;
     private final Side side;
+    private final BigDecimal price;
 }

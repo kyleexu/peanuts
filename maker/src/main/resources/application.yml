@@ -20,12 +20,22 @@ maker:
     orderbook-level: 1
     min-available-quote: 1000
     min-available-base: 0.5
-    ladder-levels: 8
-    ladder-step-bps: 10
+    ladder-levels: 20
+    ladder-step-bps: 1
     min-ladder-notional-usdt: 120
     max-ladder-notional-usdt: 500
     max-active-orders-per-contract: 12
     min-orders-per-side: 4
+    rebalance-deviation-bps: 25
+    rebalance-interval-ms: 15000
+    inventory-target-base-qty: 0
+    inventory-soft-limit-base-qty: 30
+    inventory-bias-cap: 0.5
+    taker-enabled: true
+    min-taker-notional-usdt: 30
+    max-taker-notional-usdt: 180
+    taker-sweep-bps: 1.5
+    taker-result-timeout-ms: 1500
     overlap-levels: 2
     overlap-bps: 2
     balance-warn-interval-ms: 30000
