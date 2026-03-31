@@ -6,7 +6,6 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicInteger;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import com.ganten.peanuts.common.enums.*;
@@ -15,6 +14,7 @@ import com.ganten.peanuts.maker.cache.BalanceCache;
 import com.ganten.peanuts.maker.cache.OrderExecutionStateCache;
 import com.ganten.peanuts.maker.cache.TickerCache;
 import com.ganten.peanuts.maker.client.OrderClient;
+import com.ganten.peanuts.maker.constants.Constants;
 import com.ganten.peanuts.maker.entity.LadderOrderRef;
 import com.ganten.peanuts.maker.model.OrderSubmitRequest;
 import com.ganten.peanuts.maker.util.OrderIdGenerator;
@@ -29,24 +29,10 @@ public class MakerLadderScheduler {
     private static final long[] MAKER_USERS = {10001L, 10002L, 10003L};
     private static final List<Contract> CONTRACTS = Arrays.asList(Contract.BTC_USDT);
 
-    private final boolean enabled;
     private final BalanceCache balanceCache;
     private final OrderClient orderClient;
     private final OrderExecutionStateCache orderExecutionStateCache;
     private final TickerCache tickerCache;
-    private final BigDecimal minAvailableQuote;
-    private final BigDecimal minAvailableBase;
-    private final int ladderLevels;
-    private final BigDecimal ladderStepBps;
-    private final BigDecimal minLadderNotionalUsdt;
-    private final BigDecimal maxLadderNotionalUsdt;
-    private final int maxActiveOrdersPerContract;
-    private final int minOrdersPerSide;
-    private final BigDecimal rebalanceDeviationBps;
-    private final long rebalanceIntervalMs;
-    private final BigDecimal inventoryTargetBaseQty;
-    private final BigDecimal inventorySoftLimitBaseQty;
-    private final BigDecimal inventoryBiasCap;
 
     private final Map<Contract, BigDecimal> anchors = new ConcurrentHashMap<Contract, BigDecimal>();
     private final Map<Contract, BigDecimal> sideBiasByContract = new ConcurrentHashMap<Contract, BigDecimal>();
@@ -57,92 +43,55 @@ public class MakerLadderScheduler {
     private final AtomicInteger makerCursor = new AtomicInteger(0);
 
     public MakerLadderScheduler(BalanceCache balanceCache, OrderClient orderClient,
-            OrderExecutionStateCache orderExecutionStateCache, TickerCache tickerCache,
-            @Value("${maker.random-order.enabled}") boolean enabled,
-            @Value("${maker.random-order.min-available-quote}") BigDecimal minAvailableQuote,
-            @Value("${maker.random-order.min-available-base}") BigDecimal minAvailableBase,
-            @Value("${maker.random-order.ladder-levels}") int ladderLevels,
-            @Value("${maker.random-order.ladder-step-bps}") BigDecimal ladderStepBps,
-            @Value("${maker.random-order.min-ladder-notional-usdt}") BigDecimal minLadderNotionalUsdt,
-            @Value("${maker.random-order.max-ladder-notional-usdt}") BigDecimal maxLadderNotionalUsdt,
-            @Value("${maker.random-order.max-active-orders-per-contract}") int maxActiveOrdersPerContract,
-            @Value("${maker.random-order.min-orders-per-side}") int minOrdersPerSide,
-            @Value("${maker.random-order.rebalance-deviation-bps}") BigDecimal rebalanceDeviationBps,
-            @Value("${maker.random-order.rebalance-interval-ms}") long rebalanceIntervalMs,
-            @Value("${maker.random-order.inventory-target-base-qty}") BigDecimal inventoryTargetBaseQty,
-            @Value("${maker.random-order.inventory-soft-limit-base-qty}") BigDecimal inventorySoftLimitBaseQty,
-            @Value("${maker.random-order.inventory-bias-cap}") BigDecimal inventoryBiasCap) {
+            OrderExecutionStateCache orderExecutionStateCache, TickerCache tickerCache) {
         this.balanceCache = balanceCache;
         this.orderClient = orderClient;
         this.orderExecutionStateCache = orderExecutionStateCache;
         this.tickerCache = tickerCache;
-        this.enabled = enabled;
-        this.minAvailableQuote = minAvailableQuote;
-        this.minAvailableBase = minAvailableBase;
-        this.ladderLevels = Math.max(2, ladderLevels);
-        this.ladderStepBps = ladderStepBps == null ? BigDecimal.valueOf(8) : ladderStepBps.max(BigDecimal.ONE);
-        this.minLadderNotionalUsdt =
-                minLadderNotionalUsdt == null ? BigDecimal.valueOf(120) : minLadderNotionalUsdt.max(BigDecimal.TEN);
-        this.maxLadderNotionalUsdt = maxLadderNotionalUsdt == null ? BigDecimal.valueOf(400)
-                : maxLadderNotionalUsdt.max(this.minLadderNotionalUsdt);
-        this.maxActiveOrdersPerContract = Math.max(2, maxActiveOrdersPerContract);
-        this.minOrdersPerSide =
-                Math.max(1, Math.min(minOrdersPerSide, Math.max(1, this.maxActiveOrdersPerContract / 2)));
-        this.rebalanceDeviationBps =
-                rebalanceDeviationBps == null ? BigDecimal.valueOf(25) : rebalanceDeviationBps.max(BigDecimal.ONE);
-        this.rebalanceIntervalMs = Math.max(1000L, rebalanceIntervalMs);
-        this.inventoryTargetBaseQty = inventoryTargetBaseQty == null ? BigDecimal.ZERO : inventoryTargetBaseQty;
-        this.inventorySoftLimitBaseQty = inventorySoftLimitBaseQty == null ? BigDecimal.valueOf(30)
-                : inventorySoftLimitBaseQty.max(BigDecimal.ONE);
-        this.inventoryBiasCap = inventoryBiasCap == null ? BigDecimal.valueOf(0.5)
-                : clamp(inventoryBiasCap.abs(), BigDecimal.valueOf(0.05), BigDecimal.valueOf(0.95));
-
         seedBalanceCache();
     }
 
-    @Scheduled(fixedDelayString = "${maker.random-order.fixed-delay-ms:1000}")
+    @Scheduled(fixedDelay = Constants.MAKER_FIXED_DELAY_MS)
     public void dispatchMakerTick() {
-        if (!enabled) {
-            return;
-        }
-
         try {
             Contract contract = CONTRACTS.get(ThreadLocalRandom.current().nextInt(CONTRACTS.size()));
-            BigDecimal anchor = moveAnchor(contract);
-            emitLadderOrders(contract, anchor);
+            BigDecimal anchor = this.moveAnchor(contract);
+            this.emitLadderOrders(contract, anchor);
         } catch (Exception ex) {
             log.warn("maker scheduler skipped one tick: {}", ex.getMessage());
         }
     }
 
+    /**
+     * 更新价格锚点，并返回本次tick的锚点价格。
+     * 价格锚点是我们用来构建梯子订单价格的基础，合理的价格锚点有助于提升订单被成交的概率。
+     */
     private BigDecimal moveAnchor(Contract contract) {
-        // Prefer the real market price; fall back to the last anchor we computed.
+        // 获取当前的市场价
         BigDecimal marketPrice = tickerCache.getLastPrice(contract);
+        // 优先使用市场价，如果市场价不可用，则使用上次的锚点价格作为基础进行随机漂移
         BigDecimal current = (marketPrice != null && marketPrice.signum() > 0) ? marketPrice : anchors.get(contract);
         if (current == null || current.signum() <= 0) {
             return null;
         }
+        // 在当前价格的基础上添加一个小的随机漂移，模拟市场价格的自然波动
         double drift = ThreadLocalRandom.current().nextGaussian() * 0.0005D;
         BigDecimal factor = BigDecimal.valueOf(1D + drift);
+        // 根据漂移后的因子计算新的锚点价格。
         BigDecimal moved = current.multiply(factor);
-        if (contract == Contract.BTC_USDT) {
-            moved = clamp(moved, BigDecimal.valueOf(30000), BigDecimal.valueOf(70000));
-        } else {
-            moved = clamp(moved, BigDecimal.valueOf(1500), BigDecimal.valueOf(5000));
-        }
         moved = moved.setScale(4, RoundingMode.HALF_UP);
         anchors.put(contract, moved);
         return moved;
     }
 
     private void emitLadderOrders(Contract contract, BigDecimal anchor) {
-        // Don't place any orders until the WebSocket has fed us a real market price.
-        // Prevents startup trades at the wrong hardcoded anchor price.
         if (tickerCache.getLastPrice(contract) == null) {
             return;
         }
-        long buyUser = selectBestUserByAvailable(MAKER_USERS, contract.getQuote(), makerCursor, minAvailableQuote);
-        long sellUser = selectBestUserByAvailable(MAKER_USERS, contract.getBase(), makerCursor, minAvailableBase);
+        long buyUser = selectBestUserByAvailable(MAKER_USERS, contract.getQuote(), makerCursor,
+                Constants.MAKER_MIN_AVAILABLE_QUOTE);
+        long sellUser = selectBestUserByAvailable(MAKER_USERS, contract.getBase(), makerCursor,
+                Constants.MAKER_MIN_AVAILABLE_BASE);
         if (buyUser < 0 || sellUser < 0) {
             return;
         }
@@ -167,12 +116,12 @@ public class MakerLadderScheduler {
         activeBuy = countActiveOrdersBySide(currentRefs, Side.BUY);
         activeSell = countActiveOrdersBySide(currentRefs, Side.SELL);
 
-        int missingOrders = Math.max(0, maxActiveOrdersPerContract - currentRefs.size());
+        int missingOrders = Math.max(0, Constants.MAX_ACTIVE_ORDERS_PER_CONTRACT - currentRefs.size());
         if (missingOrders <= 0) {
             return;
         }
-        int requiredBuyOrders = Math.max(0, minOrdersPerSide - activeBuy);
-        int requiredSellOrders = Math.max(0, minOrdersPerSide - activeSell);
+        int requiredBuyOrders = Math.max(0, Constants.MIN_ORDERS_PER_SIDE - activeBuy);
+        int requiredSellOrders = Math.max(0, Constants.MIN_ORDERS_PER_SIDE - activeSell);
 
         BigDecimal sideBias = combineBias(contract, price);
         List<OrderSubmitRequest> orders = buildLadderOrders(contract, buyUser, sellUser, price, buyQuoteAvailable,
@@ -203,11 +152,11 @@ public class MakerLadderScheduler {
         int maxAttempts = Math.max(maxOrders * 5, 8);
 
         for (int i = 0; i < maxAttempts && orders.size() < maxOrders; i++) {
-            int level = ThreadLocalRandom.current().nextInt(1, ladderLevels + 1);
+            int level = ThreadLocalRandom.current().nextInt(1, Constants.LADDER_LEVELS + 1);
             boolean forceBuy = requiredBuyOrders > 0;
             boolean forceSell = !forceBuy && requiredSellOrders > 0;
             boolean tryBuy = forceBuy || (!forceSell && ThreadLocalRandom.current().nextDouble() < buyProbability);
-            BigDecimal bpsOffset = ladderStepBps.multiply(BigDecimal.valueOf(level));
+            BigDecimal bpsOffset = Constants.LADDER_STEP_BPS.multiply(BigDecimal.valueOf(level));
             BigDecimal buyFactor = oneBps.subtract(bpsOffset).divide(oneBps, 8, RoundingMode.HALF_UP);
             BigDecimal sellFactor = oneBps.add(bpsOffset).divide(oneBps, 8, RoundingMode.HALF_UP);
             if (buyFactor.signum() <= 0) {
@@ -260,13 +209,13 @@ public class MakerLadderScheduler {
     }
 
     private void rebalanceSideSlots(List<LadderOrderRef> refs, int activeBuy, int activeSell) {
-        int needBuy = Math.max(0, minOrdersPerSide - activeBuy);
-        int needSell = Math.max(0, minOrdersPerSide - activeSell);
+        int needBuy = Math.max(0, Constants.MIN_ORDERS_PER_SIDE - activeBuy);
+        int needSell = Math.max(0, Constants.MIN_ORDERS_PER_SIDE - activeSell);
         if (needBuy == 0 && needSell == 0) {
             return;
         }
-        int cancelBuyCount = Math.min(Math.max(0, activeBuy - minOrdersPerSide), needSell);
-        int cancelSellCount = Math.min(Math.max(0, activeSell - minOrdersPerSide), needBuy);
+        int cancelBuyCount = Math.min(Math.max(0, activeBuy - Constants.MIN_ORDERS_PER_SIDE), needSell);
+        int cancelSellCount = Math.min(Math.max(0, activeSell - Constants.MIN_ORDERS_PER_SIDE), needBuy);
         if (cancelBuyCount <= 0 && cancelSellCount <= 0) {
             return;
         }
@@ -303,12 +252,13 @@ public class MakerLadderScheduler {
         BigDecimal lastMid = ladderMidByContract.get(contract);
         long now = System.currentTimeMillis();
         Long lastRefreshAt = ladderRefreshAtByContract.get(contract);
-        boolean intervalExpired = lastRefreshAt == null || now - lastRefreshAt.longValue() >= rebalanceIntervalMs;
+        boolean intervalExpired =
+                lastRefreshAt == null || now - lastRefreshAt.longValue() >= Constants.REBALANCE_INTERVAL_MS;
         boolean driftTooLarge = false;
         if (lastMid != null && lastMid.signum() > 0) {
             BigDecimal diff = marketMidPrice.subtract(lastMid).abs();
             BigDecimal diffBps = diff.multiply(BigDecimal.valueOf(10000)).divide(lastMid, 8, RoundingMode.HALF_UP);
-            driftTooLarge = diffBps.compareTo(rebalanceDeviationBps) >= 0;
+            driftTooLarge = diffBps.compareTo(Constants.REBALANCE_DEVIATION_BPS) >= 0;
         }
         if (driftTooLarge || intervalExpired) {
             cancelExistingLadderOrders(contract);
@@ -340,21 +290,22 @@ public class MakerLadderScheduler {
                 aggregateBase = aggregateBase.add(available);
             }
         }
-        BigDecimal delta = aggregateBase.subtract(inventoryTargetBaseQty);
-        BigDecimal normalized = delta.divide(inventorySoftLimitBaseQty, 8, RoundingMode.HALF_UP);
+        BigDecimal delta = aggregateBase.subtract(Constants.INVENTORY_TARGET_BASE_QTY);
+        BigDecimal normalized = delta.divide(Constants.INVENTORY_SOFT_LIMIT_BASE_QTY, 8, RoundingMode.HALF_UP);
         BigDecimal clipped = clamp(normalized, BigDecimal.valueOf(-1), BigDecimal.ONE);
-        return clipped.negate().multiply(inventoryBiasCap).setScale(8, RoundingMode.HALF_UP);
+        return clipped.negate().multiply(Constants.INVENTORY_BIAS_CAP).setScale(8, RoundingMode.HALF_UP);
     }
 
     private BigDecimal randomNotionalForLevel(int level) {
         int rand = ThreadLocalRandom.current().nextInt(70, 131);
         BigDecimal noise = BigDecimal.valueOf(rand).divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP);
-        BigDecimal center = BigDecimal.valueOf(ladderLevels + 1).divide(BigDecimal.valueOf(2), 4, RoundingMode.HALF_UP);
+        BigDecimal center =
+                BigDecimal.valueOf(Constants.LADDER_LEVELS + 1).divide(BigDecimal.valueOf(2), 4, RoundingMode.HALF_UP);
         BigDecimal distance = BigDecimal.valueOf(level).subtract(center).abs();
         BigDecimal normalized = distance.divide(center, 4, RoundingMode.HALF_UP).min(BigDecimal.ONE);
         BigDecimal curve = BigDecimal.ONE.subtract(normalized.multiply(new BigDecimal("0.65")));
-        BigDecimal range = maxLadderNotionalUsdt.subtract(minLadderNotionalUsdt);
-        BigDecimal baseline = minLadderNotionalUsdt.add(range.multiply(curve));
+        BigDecimal range = Constants.MAX_LADDER_NOTIONAL_USDT.subtract(Constants.MIN_LADDER_NOTIONAL_USDT);
+        BigDecimal baseline = Constants.MIN_LADDER_NOTIONAL_USDT.add(range.multiply(curve));
         return baseline.multiply(noise).setScale(4, RoundingMode.HALF_UP);
     }
 

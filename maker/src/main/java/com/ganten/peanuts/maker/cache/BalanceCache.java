@@ -3,11 +3,12 @@ package com.ganten.peanuts.maker.cache;
 import java.math.BigDecimal;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import com.ganten.peanuts.common.enums.Currency;
 import com.ganten.peanuts.maker.client.AccountClient;
+import com.ganten.peanuts.maker.constants.Constants;
+import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -15,14 +16,10 @@ import lombok.extern.slf4j.Slf4j;
 public class BalanceCache {
 
     private final AccountClient accountClient;
-    private final long warnIntervalMs;
     private final Map<String, TrackedBalance> balances = new ConcurrentHashMap<String, TrackedBalance>();
-    private final Map<String, Long> warnAt = new ConcurrentHashMap<String, Long>();
 
-    public BalanceCache(AccountClient accountClient,
-            @Value("${maker.random-order.balance-warn-interval-ms:30000}") long warnIntervalMs) {
+    public BalanceCache(AccountClient accountClient) {
         this.accountClient = accountClient;
-        this.warnIntervalMs = Math.max(1000L, warnIntervalMs);
     }
 
     public void register(long userId, Currency currency, BigDecimal initialValue) {
@@ -50,26 +47,14 @@ public class BalanceCache {
         });
     }
 
-    @Scheduled(fixedDelayString = "${maker.random-order.balance-cache-sync-fixed-delay-ms:1000}")
+    @Scheduled(fixedDelay = Constants.BALANCE_CACHE_SYNC_DELAY_MS)
     public void syncFromAccountClient() {
         for (Map.Entry<String, TrackedBalance> entry : balances.entrySet()) {
             TrackedBalance tracked = entry.getValue();
-            BigDecimal fetched = accountClient.fetchAvailableBalance(tracked.userId, tracked.currency);
+            BigDecimal fetched = accountClient.fetchAvailableBalance(tracked.getUserId(), tracked.getCurrency());
             if (fetched != null) {
-                tracked.available = fetched;
-                continue;
+                tracked.setAvailable(fetched);
             }
-            warnFallback(entry.getKey(), tracked.userId, tracked.currency, tracked.available);
-        }
-    }
-
-    private void warnFallback(String cacheKey, long userId, Currency currency, BigDecimal cached) {
-        long now = System.currentTimeMillis();
-        Long last = warnAt.get(cacheKey);
-        if (last == null || now - last.longValue() >= warnIntervalMs) {
-            warnAt.put(cacheKey, now);
-            log.warn("Read account balance failed, fallback cache. userId={}, currency={}, cached={}", userId, currency,
-                    cached);
         }
     }
 
@@ -77,6 +62,7 @@ public class BalanceCache {
         return userId + ":" + currency.name();
     }
 
+    @Data
     private static final class TrackedBalance {
         private final long userId;
         private final Currency currency;

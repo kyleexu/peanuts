@@ -2,24 +2,23 @@ package com.ganten.peanuts.maker.client;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ganten.peanuts.common.enums.Contract;
+import com.ganten.peanuts.common.util.JsonUtils;
+import com.ganten.peanuts.maker.constants.Constants;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 @Component
 public class MarketClient {
 
-    private final String marketApiBaseUrl;
+    private static final String ORDERBOOK_API = "%s/api/market/orderbook/%s?level=%d";
+    private static final String TICKER_API = "%s/api/market/ticker/%s";
     private final RestTemplate restTemplate = new RestTemplate();
-    private final ObjectMapper objectMapper = new ObjectMapper();
 
-    public MarketClient(
-            @Value("${maker.random-order.market-api-base-url:http://localhost:8082}") String marketApiBaseUrl) {
-        this.marketApiBaseUrl = marketApiBaseUrl;
-    }
+    public MarketClient() {}
 
     public BigDecimal resolvePriceByTicker(Contract contract, int orderBookLevel) {
         try {
@@ -58,13 +57,13 @@ public class MarketClient {
     public TopOfBookSnapshot fetchTopOfBook(Contract contract, int orderBookLevel) {
         TopOfBookSnapshot top = new TopOfBookSnapshot();
         try {
-            String url = String.format("%s/api/market/orderbook/%s?level=%d", this.marketApiBaseUrl, contract.name(),
-                    Math.max(1, orderBookLevel));
+            String url =
+                    String.format(ORDERBOOK_API, Constants.MARKET_URL, contract.name(), Math.max(1, orderBookLevel));
             String body = restTemplate.getForObject(url, String.class);
             if (body == null || body.isEmpty()) {
                 return top;
             }
-            JsonNode root = objectMapper.readTree(body);
+            JsonNode root = JsonUtils.readTree(body);
             top.bestBid = firstPrice(root.path("bids"));
             top.bestAsk = firstPrice(root.path("asks"));
             return top;
@@ -75,12 +74,12 @@ public class MarketClient {
 
     private BigDecimal fetchTickerLastPrice(Contract contract) {
         try {
-            String url = String.format("%s/api/market/ticker/%s", this.marketApiBaseUrl, contract.name());
+            String url = String.format(TICKER_API, Constants.MARKET_URL, contract.name());
             String body = restTemplate.getForObject(url, String.class);
             if (body == null || body.isEmpty()) {
                 return null;
             }
-            JsonNode root = objectMapper.readTree(body);
+            JsonNode root = JsonUtils.readTree(body);
             JsonNode lastPriceNode = root.path("lastPrice");
             if (lastPriceNode.isMissingNode() || lastPriceNode.isNull()) {
                 return null;

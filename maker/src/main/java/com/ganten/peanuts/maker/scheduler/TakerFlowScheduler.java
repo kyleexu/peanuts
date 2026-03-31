@@ -9,7 +9,6 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicInteger;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import com.ganten.peanuts.common.enums.*;
@@ -18,6 +17,7 @@ import com.ganten.peanuts.maker.cache.OrderExecutionStateCache;
 import com.ganten.peanuts.maker.cache.TickerCache;
 import com.ganten.peanuts.maker.client.MarketClient;
 import com.ganten.peanuts.maker.client.OrderClient;
+import com.ganten.peanuts.maker.constants.Constants;
 import com.ganten.peanuts.maker.model.OrderSubmitRequest;
 import com.ganten.peanuts.maker.util.OrderIdGenerator;
 import lombok.extern.slf4j.Slf4j;
@@ -30,20 +30,11 @@ public class TakerFlowScheduler {
     private static final long[] TAKER_USERS = {20001L, 20002L};
     private static final List<Contract> CONTRACTS = Arrays.asList(Contract.BTC_USDT);
 
-    private final boolean enabled;
-    private final boolean takerEnabled;
     private final BalanceCache balanceCache;
     private final OrderClient orderClient;
     private final OrderExecutionStateCache orderExecutionStateCache;
     private final MarketClient marketClient;
     private final TickerCache tickerCache;
-
-    private final BigDecimal minAvailableQuote;
-    private final BigDecimal minAvailableBase;
-    private final BigDecimal minTakerNotionalUsdt;
-    private final BigDecimal maxTakerNotionalUsdt;
-    private final BigDecimal takerSweepBps;
-    private final long takerResultTimeoutMs;
 
     private final Map<Contract, BigDecimal> anchors = new ConcurrentHashMap<Contract, BigDecimal>();
     private final Map<Contract, BigDecimal> sideBiasByContract = new ConcurrentHashMap<Contract, BigDecimal>();
@@ -51,39 +42,17 @@ public class TakerFlowScheduler {
     private final AtomicInteger takerCursor = new AtomicInteger(0);
 
     public TakerFlowScheduler(BalanceCache balanceCache, OrderClient orderClient,
-            OrderExecutionStateCache orderExecutionStateCache, MarketClient marketClient, TickerCache tickerCache,
-            @Value("${maker.random-order.enabled}") boolean enabled,
-            @Value("${maker.random-order.taker-enabled}") boolean takerEnabled,
-            @Value("${maker.random-order.min-available-quote}") BigDecimal minAvailableQuote,
-            @Value("${maker.random-order.min-available-base}") BigDecimal minAvailableBase,
-            @Value("${maker.random-order.min-taker-notional-usdt}") BigDecimal minTakerNotionalUsdt,
-            @Value("${maker.random-order.max-taker-notional-usdt}") BigDecimal maxTakerNotionalUsdt,
-            @Value("${maker.random-order.taker-sweep-bps}") BigDecimal takerSweepBps,
-            @Value("${maker.random-order.taker-result-timeout-ms}") long takerResultTimeoutMs) {
+            OrderExecutionStateCache orderExecutionStateCache, MarketClient marketClient, TickerCache tickerCache) {
         this.balanceCache = balanceCache;
         this.orderClient = orderClient;
         this.orderExecutionStateCache = orderExecutionStateCache;
         this.marketClient = marketClient;
         this.tickerCache = tickerCache;
-        this.enabled = enabled;
-        this.takerEnabled = takerEnabled;
-        this.minAvailableQuote = minAvailableQuote;
-        this.minAvailableBase = minAvailableBase;
-        this.minTakerNotionalUsdt =
-                minTakerNotionalUsdt == null ? BigDecimal.valueOf(30) : minTakerNotionalUsdt.max(BigDecimal.ONE);
-        this.maxTakerNotionalUsdt = maxTakerNotionalUsdt == null ? BigDecimal.valueOf(180)
-                : maxTakerNotionalUsdt.max(this.minTakerNotionalUsdt);
-        this.takerSweepBps = takerSweepBps == null ? BigDecimal.valueOf(1.5) : takerSweepBps.max(BigDecimal.ZERO);
-        this.takerResultTimeoutMs = Math.max(100L, takerResultTimeoutMs);
-
         seedBalanceCache();
     }
 
-    @Scheduled(fixedDelayString = "${maker.random-order.taker-fixed-delay-ms:200}")
+    @Scheduled(fixedDelay = Constants.TAKER_FIXED_DELAY_MS)
     public void dispatchTakerTick() {
-        if (!enabled || !takerEnabled) {
-            return;
-        }
 
         try {
             resolvePendingTakerOrders();
@@ -116,8 +85,11 @@ public class TakerFlowScheduler {
             buy = true;
         }
 
-        long userId = buy ? selectBestUserByAvailable(TAKER_USERS, contract.getQuote(), takerCursor, minAvailableQuote)
-                : selectBestUserByAvailable(TAKER_USERS, contract.getBase(), takerCursor, minAvailableBase);
+        long userId = buy
+                ? selectBestUserByAvailable(TAKER_USERS, contract.getQuote(), takerCursor,
+                        Constants.TAKER_MIN_AVAILABLE_QUOTE)
+                : selectBestUserByAvailable(TAKER_USERS, contract.getBase(), takerCursor,
+                        Constants.TAKER_MIN_AVAILABLE_BASE);
         if (userId < 0) {
             return;
         }
@@ -126,7 +98,7 @@ public class TakerFlowScheduler {
             return;
         }
 
-        BigDecimal sweepFactor = BigDecimal.valueOf(10000).add(buy ? takerSweepBps : takerSweepBps.negate())
+        BigDecimal sweepFactor = BigDecimal.valueOf(10000).add(buy ? Constants.TAKER_SWEEP_BPS : Constants.TAKER_SWEEP_BPS.negate())
                 .divide(BigDecimal.valueOf(10000), 8, RoundingMode.HALF_UP);
         BigDecimal executablePrice = (buy ? bestAsk : bestBid).multiply(sweepFactor).setScale(4, RoundingMode.HALF_UP);
         if (executablePrice.signum() <= 0) {
@@ -166,13 +138,13 @@ public class TakerFlowScheduler {
             long submittedAt = entry.getValue().longValue();
             OrderExecutionStateCache.OrderExecutionState state = orderExecutionStateCache.get(orderId);
             if (state == null) {
-                if (now - submittedAt >= takerResultTimeoutMs) {
+                if (now - submittedAt >= Constants.TAKER_RESULT_TIMEOUT_MS) {
                     iterator.remove();
                 }
                 continue;
             }
 
-            boolean done = state.isTerminal() || now - submittedAt >= takerResultTimeoutMs;
+            boolean done = state.isTerminal() || now - submittedAt >= Constants.TAKER_RESULT_TIMEOUT_MS;
             if (!done) {
                 continue;
             }
@@ -198,7 +170,7 @@ public class TakerFlowScheduler {
         int rand = ThreadLocalRandom.current().nextInt(70, 131);
         BigDecimal noise = BigDecimal.valueOf(rand).divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP);
         BigDecimal center =
-                minTakerNotionalUsdt.add(maxTakerNotionalUsdt).divide(BigDecimal.valueOf(2), 4, RoundingMode.HALF_UP);
+                Constants.MIN_TAKER_NOTIONAL_USDT.add(Constants.MAX_TAKER_NOTIONAL_USDT).divide(BigDecimal.valueOf(2), 4, RoundingMode.HALF_UP);
         return center.multiply(noise).setScale(4, RoundingMode.HALF_UP);
     }
 

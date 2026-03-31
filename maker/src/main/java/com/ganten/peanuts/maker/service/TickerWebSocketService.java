@@ -19,26 +19,20 @@ import org.java_websocket.client.WebSocketClient;
 import org.java_websocket.drafts.Draft_6455;
 import org.java_websocket.enums.ReadyState;
 import org.java_websocket.handshake.ServerHandshake;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ganten.peanuts.common.enums.Contract;
+import com.ganten.peanuts.common.util.JsonUtils;
 import com.ganten.peanuts.maker.cache.TickerCache;
+import com.ganten.peanuts.maker.constants.Constants;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Service
 public class TickerWebSocketService {
 
-    private final boolean enabled;
-    private final List<String> websocketUrls;
-    private final List<String> symbols;
-    private final long reconnectDelayMs;
     private final TickerCache tickerCache;
-    private final long heartbeatIntervalMs;
 
-    private final ObjectMapper objectMapper = new ObjectMapper();
     private final ScheduledExecutorService reconnectExecutor = Executors.newSingleThreadScheduledExecutor();
     private final ScheduledExecutorService heartbeatExecutor = Executors.newSingleThreadScheduledExecutor();
     private final AtomicBoolean shutdown = new AtomicBoolean(false);
@@ -48,23 +42,13 @@ public class TickerWebSocketService {
     private volatile WebSocketClient client;
     private volatile ScheduledFuture<?> heartbeatFuture;
 
-    public TickerWebSocketService(TickerCache tickerCache,
-            @Value("${maker.ticker.websocket.enabled:true}") boolean enabled,
-            @Value("${maker.ticker.websocket.urls:wss://stream-pro.hashkey.com/quote/ws/v2}") String websocketUrls,
-            @Value("${maker.ticker.websocket.symbols:BTCUSDT,ETHUSDT}") String symbols,
-            @Value("${maker.ticker.websocket.reconnect-delay-ms:3000}") long reconnectDelayMs,
-            @Value("${maker.ticker.websocket.heartbeat-interval-ms:10000}") long heartbeatIntervalMs) {
+    public TickerWebSocketService(TickerCache tickerCache) {
         this.tickerCache = tickerCache;
-        this.enabled = enabled;
-        this.websocketUrls = parseUrls(websocketUrls);
-        this.symbols = parseSymbols(symbols);
-        this.reconnectDelayMs = Math.max(500L, reconnectDelayMs);
-        this.heartbeatIntervalMs = Math.max(1000L, heartbeatIntervalMs);
     }
 
     @PostConstruct
     public void start() {
-        if (!enabled) {
+        if (!Constants.TICKER_WEBSOCKET_ENABLED) {
             log.info("Ticker websocket disabled by config.");
             return;
         }
@@ -144,12 +128,12 @@ public class TickerWebSocketService {
             return;
         }
         try {
-            for (String symbol : symbols) {
-                JsonNode payload = objectMapper.createObjectNode().put("topic", "realtimes").put("event", "sub")
-                        .set("params", objectMapper.createObjectNode().put("symbol", symbol));
-                this.client.send(objectMapper.writeValueAsString(payload));
+            for (String symbol : parseSymbols(Constants.TICKER_WEBSOCKET_SYMBOLS)) {
+                JsonNode payload = JsonUtils.createObjectNode().put("topic", "realtimes").put("event", "sub")
+                        .set("params", JsonUtils.createObjectNode().put("symbol", symbol));
+                this.client.send(JsonUtils.toJson(payload));
             }
-            log.info("HashKey ticker websocket subscribed symbols={}", symbols);
+            log.info("HashKey ticker websocket subscribed symbols={}", Constants.TICKER_WEBSOCKET_SYMBOLS);
         } catch (Exception ex) {
             log.warn("Failed to subscribe HashKey ticker stream: {}", ex.getMessage());
         }
@@ -157,7 +141,7 @@ public class TickerWebSocketService {
 
     private void handleMessage(String message) {
         try {
-            JsonNode root = objectMapper.readTree(message);
+            JsonNode root = JsonUtils.readTree(message);
             JsonNode pongNode = root.path("pong");
             if (!pongNode.isMissingNode() && !pongNode.isNull()) {
                 lastPongAt.set(pongNode.asLong(System.currentTimeMillis()));
@@ -268,8 +252,9 @@ public class TickerWebSocketService {
     }
 
     private String pickEndpointUrl() {
-        int idx = Math.floorMod(endpointCursor.get(), websocketUrls.size());
-        return websocketUrls.get(idx);
+        List<String> urls = parseUrls(Constants.TICKER_WEBSOCKET_URL);
+        int idx = Math.floorMod(endpointCursor.get(), urls.size());
+        return urls.get(idx);
     }
 
     private void rotateEndpoint() {
@@ -280,13 +265,13 @@ public class TickerWebSocketService {
         if (shutdown.get()) {
             return;
         }
-        reconnectExecutor.schedule(this::connect, reconnectDelayMs, TimeUnit.MILLISECONDS);
+        reconnectExecutor.schedule(this::connect, Constants.TICKER_RECONNECT_DELAY_MS, TimeUnit.MILLISECONDS);
     }
 
     private synchronized void startHeartbeat() {
         stopHeartbeat();
-        heartbeatFuture = heartbeatExecutor.scheduleAtFixedRate(this::sendPing, heartbeatIntervalMs,
-                heartbeatIntervalMs, TimeUnit.MILLISECONDS);
+        heartbeatFuture = heartbeatExecutor.scheduleAtFixedRate(this::sendPing, Constants.TICKER_HEARTBEAT_INTERVAL_MS,
+                Constants.TICKER_HEARTBEAT_INTERVAL_MS, TimeUnit.MILLISECONDS);
     }
 
     private synchronized void stopHeartbeat() {
@@ -303,8 +288,8 @@ public class TickerWebSocketService {
         }
         try {
             long now = System.currentTimeMillis();
-            JsonNode payload = objectMapper.createObjectNode().put("ping", now);
-            ws.send(objectMapper.writeValueAsString(payload));
+            JsonNode payload = JsonUtils.createObjectNode().put("ping", now);
+            ws.send(JsonUtils.toJson(payload));
             log.debug("HashKey ticker websocket ping={}", now);
         } catch (Exception ex) {
             log.warn("Failed to send HashKey ticker heartbeat: {}", ex.getMessage());

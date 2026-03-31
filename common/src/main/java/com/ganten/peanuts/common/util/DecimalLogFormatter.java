@@ -5,8 +5,7 @@ import java.math.RoundingMode;
 
 public final class DecimalLogFormatter {
 
-    private DecimalLogFormatter() {
-    }
+    private DecimalLogFormatter() {}
 
     public static String p4(BigDecimal value) {
         if (value == null) {
